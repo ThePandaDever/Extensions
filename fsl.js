@@ -1,6 +1,13 @@
 (function(Scratch) {
     "use strict";
 
+    var asts = {};
+    var file_requests = [];
+    var file_system = {};
+
+    var api_requests = {};
+    var api_data = {};
+    
     // imurmurhash-js
     function murmurhash3_32_gc(key, seed) {
         var remainder, bytes, h1, h1b, c1, c1b, c2, c2b, k1, i;
@@ -1104,7 +1111,7 @@
             "key": item
         };
     }
-
+    
     function generateAst(code) {
         let ast = {
             "functions": {}
@@ -1154,6 +1161,13 @@
         return ast;
     }
 
+    function getAst(fsl) {
+        let key = murmurhash3_32_gc(fsl);
+        if (Object.keys(asts).includes(key)) { return asts[key]; }
+        asts[key] = generateAst(fsl);
+        return asts[key];
+    }
+
     function runFunction(ast, func, scope = {}) {
         if (typeof (ast) != "object") {
             return;
@@ -1192,6 +1206,15 @@
                             }
                         }
                         console.log(str.trim());
+                        break
+                    case "api_call":
+                        if (content.args.length != 3) {return}
+                        switch (content["args"]) {
+                            case "file":
+                                break
+                            default:
+                                api_call()
+                        }
                         break
                     default:
                         if (Object.keys(ctx.functions).includes(content["id"])) {
@@ -1276,7 +1299,7 @@
         switch (op) {
             case "+":
                 if (a[1] == "number" && b[1] == "number") {
-                    return [a[0] + b[0], "number"]
+                    return [a[0] + b[0], "number"];
                 } else {
                     return [getStr(a) + " " + getStr(b), "string"];
                 }
@@ -1345,11 +1368,26 @@
         return null;
     }
 
+    function api_call(api,command,data) {
+        if (!Object.keys(api_requests).includes(api)) {api_requests[api] = []}
+        api_requests[api].push({
+            "command":command,
+            "data":data
+        });
+        Scratch.vm.runtime.startHats('fsl_hatApiRequest');
+    }
+
+    function file_call(type, path, data, path2) {
+        file_requests.push({
+            "type":type,
+            "path":path,
+            "data":data,
+            "path2":path2
+        });
+        Scratch.vm.runtime.startHats('fsl_hatFileRequest');
+    }
+
     class FSL {
-        constructor() {
-            this.ast_caches = {};
-            this.caching = true;
-        }
         getInfo() {
             return {
                 id: "fsl",
@@ -1361,132 +1399,334 @@
                         text: "Settings"
                     },
                     {
-                        opcode: "setCaching",
-                        blockType: BlockType.REPORTER,
-                        text: "Set Caching [val]",
-                        arguments: {
-                            val: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'true',
-                                menu: "BOOLEANMENU"
-                            }
-                        }
-                    },
-                    {
                         blockType: Scratch.BlockType.LABEL,
-                        text: "Execution"
+                        text: "General"
                     },
                     {
                         opcode: "fslRun",
                         blockType: BlockType.REPORTER,
-                        text: "Run FSL [fsl] [func]",
+                        text: "Run FSL [func] in [fsl]",
                         arguments: {
-                            fsl: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'fn main() { print("hello world!") }'
-                            },
-                            func: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'main'
-                            }
+                            fsl: { type: ArgumentType.STRING, defaultValue: 'fn main() { print("hello world!") }' },
+                            func: { type: ArgumentType.STRING, defaultValue: 'main' }
                         }
                     },
                     {
-                        blockType: Scratch.BlockType.LABEL,
-                        text: "Splitting"
-                    },
-                    {
-                        opcode: "splitStatement",
+                        opcode: "fslRunScope",
                         blockType: BlockType.REPORTER,
-                        text: "Split Statement [fsl]",
+                        text: "Run FSL [func] in [fsl] with [scope] as scope",
                         arguments: {
-                            fsl: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'statement{code}'
-                            }
+                            fsl: { type: ArgumentType.STRING, defaultValue: 'fn main() { print("hello world!") }' },
+                            func: { type: ArgumentType.STRING, defaultValue: 'main' },
+                            scope: {  type: ArgumentType.STRING, defaultValue: '{}' }
                         }
                     },
-                    {
-                        opcode: "splitSegment",
-                        blockType: BlockType.REPORTER,
-                        text: "Split Segment [fsl]",
-                        arguments: {
-                            fsl: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'cmd;statement{code}cmd2'
-                            }
-                        }
-                    },
-                    {
-                        opcode: "splitCommand",
-                        blockType: BlockType.REPORTER,
-                        text: "Split Command [cmd]",
-                        arguments: {
-                            cmd: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'mycmd(data)'
-                            }
-                        }
-                    },
+                    "---",
                     {
                         opcode: "generateAst",
                         blockType: BlockType.REPORTER,
                         text: "Generate AST [fsl]",
                         arguments: {
-                            fsl: {
-                                type: ArgumentType.STRING,
-                                defaultValue: 'fn main() { print(2 + 3 == (2+3) and false); if (true) {print("whoah")} }'
-                            }
+                            fsl: { type: ArgumentType.STRING, defaultValue: 'fn main() { print("hello world") }' }
                         }
-                    }
+                    },
+                    {
+                        blockType: Scratch.BlockType.LABEL,
+                        text: "Listeners"
+                    },
+                    {
+                        opcode: "hatFileRequest",
+                        blockType: BlockType.EVENT,
+                        text: "New File Request",
+                        isEdgeActivated: false
+                    },
+                    {
+                        opcode: "fileRequestCreate",
+                        blockType: BlockType.COMMAND,
+                        text: "Create File Request [type] at [path] and [data] also at (optional) [path2]",
+                        arguments: {
+                            type: { type: ArgumentType.STRING, defaultValue: 'type' },
+                            path: { type: ArgumentType.STRING, defaultValue: 'myfile.txt' },
+                            data: { type: ArgumentType.STRING, defaultValue: '{}' },
+                            path2: { type: ArgumentType.STRING, defaultValue: 'myfile2.txt' },
+                        }
+                    },
+                    {
+                        opcode: "fileRequestData",
+                        blockType: BlockType.REPORTER,
+                        text: "First File Request's [field]",
+                        arguments: {
+                            field: { type: ArgumentType.STRING, defaultValue: 'type', menu: 'fileRequestType' }
+                        }
+                    },
+                    {
+                        opcode: "fileRequestFull",
+                        blockType: BlockType.REPORTER,
+                        text: "First File Request as [representation]",
+                        arguments: {
+                            representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation'}
+                        }
+                    },
+                    {
+                        opcode: "fileRequestsAll",
+                        blockType: BlockType.REPORTER,
+                        text: "All File requests as [representation]",
+                        arguments: {
+                            representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation' },
+                        }
+                    },
+                    {
+                        opcode: "filePop",
+                        blockType: BlockType.COMMAND,
+                        text: "Pop latest file request"
+                    },
+                    {
+                        opcode: "fileClear",
+                        blockType: BlockType.COMMAND,
+                        text: "Clear file requests"
+                    },
+                    {
+                        opcode: "fileUpdate",
+                        blockType: BlockType.COMMAND,
+                        text: "Set File System to [system]",
+                        arguments: {
+                            system: { type: ArgumentType.STRING, defaultValue: '{}' }
+                        }
+                    },
+                    "---",
+                    {
+                        opcode: "hatApiRequest",
+                        blockType: BlockType.EVENT,
+                        text: "API Request",
+                        isEdgeActivated: false
+                    },
+                    {
+                        opcode: "apiRequestCreate",
+                        blockType: BlockType.COMMAND,
+                        text: "Create API Request [api] [command] with [data]",
+                        arguments: {
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' },
+                            command: { type: ArgumentType.STRING, defaultValue: 'myCommand' },
+                            data: { type: ArgumentType.STRING, defaultValue: '{}' },
+                        }
+                    },
+                    {
+                        opcode: "apiRequestData",
+                        blockType: BlockType.REPORTER,
+                        text: "First API Request's [field] on [api]",
+                        arguments: {
+                            field: { type: ArgumentType.STRING, defaultValue: 'command', menu: 'apiRequestType' },
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' }
+                        }
+                    },
+                    {
+                        opcode: "apiRequestFull",
+                        blockType: BlockType.REPORTER,
+                        text: "First API Request as [representation] on [api]",
+                        arguments: {
+                            representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation' },
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' }
+                        }
+                    },
+                    {
+                        opcode: "apiRequests",
+                        blockType: BlockType.REPORTER,
+                        text: "API Requests on [api] as [representation]",
+                        arguments: {
+                            representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation' },
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' }
+                        }
+                    },
+                    {
+                        opcode: "apiRequestsAll",
+                        blockType: BlockType.REPORTER,
+                        text: "All API requests as [representation]",
+                        arguments: {
+                            representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation' },
+                        }
+                    },
+                    {
+                        opcode: "apiPop",
+                        blockType: BlockType.COMMAND,
+                        text: "Pop latest api request on [api]",
+                        arguments: {
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' }
+                        }
+                    },
+                    {
+                        opcode: "apiClear",
+                        blockType: BlockType.COMMAND,
+                        text: "Clear API requests on [api]",
+                        arguments: {
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' }
+                        }
+                    },
+                    {
+                        opcode: "apiClearAll",
+                        blockType: BlockType.COMMAND,
+                        text: "Clear All API requests"
+                    },
+                    {
+                        opcode: "apiUpdate",
+                        blockType: BlockType.COMMAND,
+                        text: "Set API Data to [data] for [api]",
+                        arguments: {
+                            data: { type: ArgumentType.STRING, defaultValue: '{}' },
+                            api: { type: ArgumentType.STRING, defaultValue: 'myAPI' }
+                        }
+                    },
                 ],
                 menus: {
-                    BOOLEANMENU: {
+                    boolean: {
                         acceptReporters: true,
                         items: ['true', 'false']
+                    },
+                    fileRequestType: {
+                        acceptReporters: true,
+                        items: [
+                            'type',
+                            'path',
+                            'path2',
+                            'data',
+                        ]
+                    },
+                    apiRequestType: {
+                        acceptReporters: true,
+                        items: [
+                            "command",
+                            "data"
+                        ]
+                    },
+                    objRepresentation: {
+                        acceptReporters: true,
+                        items: [
+                            "json",
+                            "object"
+                        ]
                     }
                 }
             };
         }
 
-        setCaching({ caching }) {
-            if (caching = 'false') {
-                this.caching = false;
-            } else {
-                this.caching = true;
-            }
-        }
-
         fslRun({ fsl, func }) {
-            let key = murmurhash3_32_gc(fsl);
             let ast = {};
-            if (this.caching) {
-                if (!Object.keys(this.ast_caches).includes(key)) {
-                    ast = generateAst(fsl);
-                    this.ast_caches[key] = ast;
-                } else {
-                    ast = this.ast_caches[key]
-                }
-            } else {
-                ast = generateAst(fsl);
+            if (typeof(fsl) !== 'object') {
+                ast = getAst(fsl);
             }
             return runFunction(ast, func);
         }
-
-        splitStatement({ fsl }) {
-            return JSON.stringify(splitStatement(fsl));
+        fslRunScope({ fsl, func, scope }) {
+            let ast = {};
+            if (typeof(fsl) !== 'object') {
+                ast = getAst(fsl);
+            }
+            if (typeof(scope) !== 'object') {
+                scope = JSON.parse(scope);
+            }
+            return runFunction(ast, func, scope);
         }
-        splitSegment({ fsl }) {
-            return JSON.stringify(splitSegment(fsl));
-        }
-        splitCommand({ cmd }) {
-            return JSON.stringify(splitOperators(cmd));
-        }
-
+        
         generateAst({ fsl }) {
             let ast = generateAst(fsl);
-            console.log(ast);
+            console.log("ast:", ast);
             return JSON.stringify(ast);
+        }
+
+        fileRequestCreate({ type, path, data, path2 }) {
+            file_call(type, path, data, path2);
+        }
+        fileRequestData({ field }) {
+            if (file_requests.length > 0) {
+                return file_requests[0][field];
+            }
+            return '';
+        }
+        fileRequestFull({ representation }) {
+            if (file_requests.length == 0) {
+                if (representation == "json") {return '{}'}
+                return {};
+            }
+            if (representation == "json") {
+                return JSON.stringify(file_requests[0]);
+            }
+            return file_requests[0];
+        }
+        fileRequests({ representation }) {
+            if (representation == "json") {
+                return JSON.stringify(file_requests);
+            }
+            return file_requests;
+        }
+        fileRequestsAll({ representation }) {
+            if (representation == "json") {
+                return JSON.stringify(file_requests);
+            }
+            return file_requests;
+        }
+        filePop({ api }) {
+            file_requests.shift();
+        }
+        fileClear() {
+            file_requests = [];
+        }
+        fileUpdate({ sys }) {
+            if (typeof(sys) !== 'object' && (typeof(sys) !== 'string')) {return}
+            
+            if (typeof(sys) === 'string') {
+                sys = JSON.parse(sys);
+            }
+            
+            file_system = sys;
+        }
+        
+        apiRequestCreate({ api, command, data }) {
+            api_call(api, command, data);
+        }
+        apiRequestData({ field, api }) {
+            if (!Object.keys(api_requests).includes(api)) {return ""}
+            if (api_requests[api].length > 0) {
+                return api_requests[api][0][field];
+            }
+            return '';
+        }
+        apiRequestFull({ representation, api }) {
+            if (!Object.keys(api_requests).includes(api)) {if (representation == "json"){return "{}"} return {}}
+            if (representation == "json") {
+                return JSON.stringify(api_requests[api][0]);
+            }
+            return api_requests[api][0];
+        }
+        apiRequests({ api, representation }) {
+            if (!Object.keys(api_requests).includes(api)) {if (representation == "json"){return "[]"} return []}
+            if (representation == "json") {
+                return JSON.stringify(api_requests[api]);
+            }
+            return api_requests[api];
+        }
+        apiRequestsAll({ representation }) {
+            if (representation == "json") {
+                return JSON.stringify(api_requests);
+            }
+            return api_requests;
+        }
+        apiPop({ api }) {
+            if (!Object.keys(api_requests).includes(api)) {return}
+            api_requests[api].shift();
+        }
+        apiClear({ api }) {
+            api_requests[api] = [];
+        }
+        apiClearAll() {
+            api_requests = {}
+        }
+        apiUpdate({ data, api }) {
+            if (typeof(data) !== 'object' && (typeof(data) !== 'string')) {return}
+            
+            if (typeof(data) === 'string') {
+                data = JSON.parse(data);
+            }
+            
+            api_data[api] = data;
         }
     }
     Scratch.extensions.register(new FSL());
