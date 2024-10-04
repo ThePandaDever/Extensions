@@ -244,7 +244,7 @@
             }
 
             // Split on operators only when not inside quotes, brackets, braces, or parentheses
-            if (operators.test(char) && !(operators.test(input[i - 1]) || (input[i - 1] == " " && (input[i + 1] != " " || operators.test(input[i + 1])))) && !inSingleQuote && !inDoubleQuote && inBrackets === 0 && inBraces === 0 && inParens === 0) {
+            if (operators.test(char) && (!(operators.test(input[i - 1]) || (input[i - 1] == " " && (input[i + 1] != " " || operators.test(input[i + 1]))))) && !(char == "+" && input[i + 1] == "+") && !inSingleQuote && !inDoubleQuote && inBrackets === 0 && inBraces === 0 && inParens === 0) {
                 if (buffer.trim()) {
                     result.push(buffer.trim());
                 }
@@ -252,6 +252,14 @@
                 // Keep the operator as a separate element
                 buffer = '';
             } else {
+                if (input[i] == "+" && input[i+1] == "+") {
+                    result.push(buffer.trim());
+                    buffer = '';
+                }
+                if (input[i-1] == "+" && input[i - 2] == "+") {
+                    result.push(buffer.trim());
+                    buffer = '';
+                }
                 buffer += char;
             }
         }
@@ -1016,6 +1024,9 @@
                     case "+":
                         data.push("+");
                         break
+                    case "++":
+                        data.push("++");
+                        break
                     case "-":
                         data.push("-");
                         break
@@ -1121,9 +1132,8 @@
 
                                 let ast_fn_args = {};
                                 let ast_fn_arg_map = [];
-
                                 for (let raw_pair of pairs) {
-                                    let pair = splitSpacedCommand(raw_pair);
+                                    let pair = splitCharedCommand(raw_pair, " ");
                                     if (pair.length == 2) {
                                         ast_fn_args[pair[1]] = pair[0];
                                         ast_fn_arg_map.push(pair[1]);
@@ -1144,7 +1154,7 @@
         return ast;
     }
 
-    function runFunction(ast, func) {
+    function runFunction(ast, func, scope = {}) {
         if (typeof (ast) != "object") {
             return;
         }
@@ -1159,7 +1169,7 @@
         let ctx = {
             "functions": functions,
             "ast": ast,
-            "scope": {}
+            "scope": scope
         };
         for (let content of fn["content"]) {
             runCommand(content, ctx);
@@ -1185,7 +1195,16 @@
                         break
                     default:
                         if (Object.keys(ctx.functions).includes(content["id"])) {
-                            runFunction(ctx.ast, content["id"])
+                            let scope = {};
+                            if (content.args.length > 0) {
+                                let fn = ctx.functions[content["id"]];
+                                for (let i = 0; i < fn["arg_map"].length; i++) {
+                                    let k = fn["arg_map"][i];
+                                    let v = runArgument(content["args"][i])
+                                    scope[k] = v;
+                                }
+                            }
+                            runFunction(ctx.ast, content["id"], scope)
                         } else {
                             console.warn("unknown function '" + content["id"] + "'");
                         }
@@ -1212,6 +1231,7 @@
                         let op = data[index]
                         switch (op) {
                             case "+":
+                            case "++":
                             case "-":
                             case "*":
                             case "/":
@@ -1260,6 +1280,9 @@
                 } else {
                     return [getStr(a) + " " + getStr(b), "string"];
                 }
+                break
+            case "++":
+                return [getStr(a) + getStr(b), "string"];
                 break
             case "-":
                 if (a[1] == "number" && b[1] == "number") {
@@ -1457,7 +1480,7 @@
             return JSON.stringify(splitSegment(fsl));
         }
         splitCommand({ cmd }) {
-            return JSON.stringify(splitCommand(cmd));
+            return JSON.stringify(splitOperators(cmd));
         }
 
         generateAst({ fsl }) {
