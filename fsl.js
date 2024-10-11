@@ -126,6 +126,29 @@
     function arrayEquals(a, b) {
         return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((val, index) => val === b[index]);
     }
+    // id be dead if mist didnt make this :pray:
+    Object.isSame = function (obj1,obj2) {
+    if (typeof obj1 === "object" && typeof obj2 === "object") {
+        if (obj1 === obj2) return true;
+
+        let obj1Keys = Object.keys(obj1);
+        let obj2Keys = Object.keys(obj2);
+        if (obj1Keys.length !== obj2Keys.length) return false;
+
+        for (let key of obj2Keys) {
+          if (!obj1Keys.includes(key)) return false;
+          const obj1Type = typeof obj1[key];
+          const obj2Type = typeof obj2[key];
+          if (obj1Type !== obj2Type) return false;
+          if (obj1Type === "object" && obj2Type === "object") {
+            if (!Object.isSame(obj1[key], obj2[key])) return false;
+          } else if (obj1[key] !== obj2[key]) return false;
+        }
+        return true;
+    } else {
+        return false;
+    }
+}
 
     function deStr(str) {
         // Check if the string starts and ends with the same type of quotes
@@ -439,7 +462,7 @@
         let currentPart = '';
         let braceCount = 0;
         let i = 0;
-        let insideCommand = false;
+        let cmddepth = 0;
         let insideQuotes = false;
         // Track if we are inside quotes
         let quoteType = '';
@@ -498,37 +521,34 @@
                 // Skip the rest of the loop for this iteration
             }
 
-            // Handle braces outside of quotes
-            if (char === '{') {
-                braceCount++;
-                insideCommand = true;
-                // We are inside a code block
-            } else if (char === '}') {
-                braceCount--;
-            }
-
             // Collect the characters for the current command/block
             currentPart += char;
-
-            // If we've closed a code block, finalize the current part
-            if (braceCount === 0 && insideCommand) {
-                let can = true;
-                if (i + 1 < input.length) {
-                    if (input[i + 1] == ")") {
-                        can = false;
-                    }
-                }
-                if (can) {
-                    result.push(currentPart.trim());
-                    currentPart = '';
-                    insideCommand = false;
+            
+            // Handle braces outside of quotes
+            if (char === '{' && cmddepth == 0) {
+                braceCount++;
+            } else if (char === '}' && cmddepth == 0) {
+                braceCount--;
+                if (braceCount == 0) {
+                    result.push(currentPart.trim())
+                    currentPart = ""
                 }
             }
 
+            if (char == "(" && braceCount == 0) {
+                cmddepth++;
+            } else if (char == ")" && braceCount == 0) {
+                cmddepth--;
+            }
+
+
+            // If we've closed a code block, finalize the current part
+
             // If we reach a semicolon outside of any block, finalize the statement
-            if (char === ';' && braceCount === 0 && !insideCommand) {
-                result.push(currentPart.trim().replace(/;$/, ''));
-                // Remove the semicolon
+            if (char === ';' && braceCount === 0 && cmddepth == 0) {
+                if (result[result.length-1] != "") {
+                    result.push(currentPart.trim().replace(/;$/, ''));
+                }
                 currentPart = '';
             }
 
@@ -541,7 +561,6 @@
             result.push(currentPart.trim().replace(/;$/, ''));
             // Remove semicolon if present
         }
-
         return result;
     }
 
@@ -673,6 +692,7 @@
         let isInQuotes = false;
         let quoteChar = '';
         let depth = 0;
+        let cdepth = 0;
 
         for (let i = 0; i < input.length; i++) {
             const char = input[i];
@@ -690,7 +710,7 @@
                 currentPart += char;
             } // Handle opening brackets (parentheses, curly braces, square brackets)
             else if (char === '(') {
-                if (depth == 0) {
+                if (depth == 0 && cdepth == 0) {
                     result.push(currentPart.trim());
                     currentPart = "(";
                 } else {
@@ -700,7 +720,7 @@
             } // Handle closing parentheses
             else if (char === ')') {
                 depth--;
-                if (depth == 0) {
+                if (depth == 0 && cdepth == 0) {
                     currentPart += ")";
                     result.push(currentPart.trim());
                     currentPart = "";
@@ -712,16 +732,16 @@
                 currentPart += char;
             }
             if (char === '{') {
-                depth++;
+                cdepth++;
             } else if (char === '}') {
-                depth--;
+                cdepth--;
             }
         }
-
+        
         if (currentPart != "") {
             result.push(currentPart.trim())
         }
-
+        
         return result;
     }
 
@@ -731,67 +751,66 @@
         let parensDepth = 0;
         let curlyDepth = 0;
         let squareDepth = 0;
+        let isInQuotes = false;
+        let quoteChar = "";
 
         for (let i = 0; i < str.length; i++) {
             const char = str[i];
-
-            // Handle brackets opening
-            if (char === '(' || char === '{' || char === '[') {
-                // If buffer has content, push it first
-                if (buffer.length > 0) {
-                    result.push(buffer);
-                    buffer = '';
+            
+            if (isInQuotes) {
+                buffer += char;
+                if (char === quoteChar) {
+                    isInQuotes = false;
+                    // End of quoted part
                 }
-
+                continue;
+            } else if (char === '"' || char === "'") {
+                isInQuotes = true;
+                quoteChar = char;
+                buffer += char;
+                continue;
+            }
+            
+            if (char === '(') parensDepth++;
+            if (char === '{') curlyDepth++;
+            if (char === '[') squareDepth++;
+            
+            if (char === ')') parensDepth--;
+            if (char === '}') curlyDepth--;
+            if (char === ']') squareDepth--;
+            
+            // Handle brackets opening
+            if (char === '[' && squareDepth == 1) {
+                
+                if (parensDepth === 0 && curlyDepth === 0) {
+                    if (buffer != "") {
+                        result.push(buffer);
+                        buffer = '';
+                    }
+                }
+                
                 // Start a new bracketed section
                 buffer += char;
 
-                // Track depth for corresponding bracket type
-                if (char === '(') parensDepth++;
-                if (char === '{') curlyDepth++;
-                if (char === '[') squareDepth++;
-
                 continue;
             }
-
+            
             // Handle brackets closing
-            if ((char === ')' && parensDepth > 0) ||
-                (char === '}' && curlyDepth > 0) ||
-                (char === ']' && squareDepth > 0)) {
+            if (char === ']' && squareDepth == 0) {
 
                 buffer += char; // Add closing bracket
 
                 // Decrease depth for corresponding bracket type
-                if (char === ')') parensDepth--;
-                if (char === '}') curlyDepth--;
-                if (char === ']') squareDepth--;
 
                 // If we've closed all the depth of that type, push the buffer
-                if (parensDepth === 0 && curlyDepth === 0 && squareDepth === 0) {
+                if (parensDepth === 0 && curlyDepth === 0) {
                     result.push(buffer);
                     buffer = '';
                 }
                 continue;
             }
-
-            // Split into tokens on encountering non-bracket characters
-            if (parensDepth === 0 && curlyDepth === 0 && squareDepth === 0) {
-                if (char.match(/[\w$]/)) {
-                    buffer += char; // Continue building word (letters/numbers/valid symbols)
-                } else {
-                    if (buffer.length > 0) {
-                        result.push(buffer); // Push current word to result
-                        buffer = '';
-                    }
-                    // Push the non-word character if it's not whitespace
-                    if (!char.match(/\s/)) {
-                        result.push(char);
-                    }
-                }
-            } else {
-                // If inside brackets, add character to buffer
-                buffer += char;
-            }
+            
+            buffer += char;
         }
 
         // Push any remaining buffer
@@ -1073,6 +1092,27 @@
             return [item.substring(1, item.length - 1), "string"];
         }
 
+        let references = splitReferences(item);
+        if (references.length > 1) {
+            let ast = {
+                "id": "key_get",
+                "value": generateAstArgument(references[0])
+            }
+            let keys = []
+            for (let i = 1; i < references.length; i++) {
+                if (isSquareBrackets(references[i])) {
+                    keys.push({
+                        "type": "key",
+                        "value": generateAstArgument(removeSquareBraces(references[i]))
+                    })
+                } else {
+                    console.warn("unexpected token '" + references[i] + "'")
+                }
+            }
+            ast["keys"] = keys
+            return ast;
+        }
+        
         if (isBrackets(item)) {
             return generateAstArgument(removeBraces(item))
         }
@@ -1287,6 +1327,69 @@
                         arr.push(runArgument(items[i], ctx));
                     }
                     return [arr, "array"];
+                case "key_get":
+                    if (true) {
+                        let val = runArgument(content["value"]);
+                        switch (val[1]) {
+                            case "object":
+                                for (let key of content["keys"]) {
+                                    key["value"] = runArgument(key["value"]);
+                                    switch (key["type"]) {
+                                        case "key":
+                                            switch (key["value"][1]) {
+                                                case "string":
+                                                    if (Object.keys(val[0]).includes(key["value"][0])) {
+                                                        val = runArgument(val[0][key["value"][0]])
+                                                    } else {
+                                                        return [null,"null"]
+                                                    }
+                                                    break;
+                                                default:
+                                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
+                                            }
+                                            break;
+                                        default:
+                                            console.warn("unknown key type '" + key["type"] + "'")
+                                    }
+                                }
+                                break
+                            case "array": case "string":
+                                for (let key of content["keys"]) {
+                                    key["value"] = runArgument(key["value"]);
+                                    switch (key["type"]) {
+                                        case "key":
+                                            switch (key["value"][1]) {
+                                                case "number":
+                                                    if (Object.keys(val[0]).includes((key["value"][0]-1).toString())) {
+                                                        let v = val[0][key["value"][0]-1];
+                                                        if (val[1] == "string") {
+                                                            v = [v,"string"]
+                                                        }
+                                                        val = runArgument(v)
+                                                    } else {
+                                                        return [null,"null"]
+                                                    }
+                                                    break;
+                                                default:
+                                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
+                                                    return [null,"null"]
+                                            }
+                                            break;
+                                        default:
+                                            console.warn("unknown key type '" + key["type"] + "'")
+                                            return [null,"null"]
+                                    }
+                                }
+                                break
+                            default:
+                                console.warn("cant get item from type '" + val[1] + "'");
+                                return [null,"null"]
+                        }
+                        return val;
+                    }
+                    break
+                default:
+                    console.warn("unknown arg type '" + content["id"] + "'")
             }
         }
 
