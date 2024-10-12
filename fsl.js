@@ -122,6 +122,10 @@
     }
 
     const isNumeric = (string) => /^[+-]?\d+(\.\d+)?$/.test(string);
+    function isValidReference(str) {
+        const regex = /^[A-Za-z0-9_@#]+$/;
+        return regex.test(str);
+    }
 
     function arrayEquals(a, b) {
         return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((val, index) => val === b[index]);
@@ -1074,6 +1078,35 @@
             return ast;
         }
 
+        let methods = splitCharedCommand(item,".");
+        if (methods.length > 1) {
+            let ast = {
+                "id": "methods",
+                "value": generateAstArgument(methods[0]),
+                "list": []
+            }
+            for (let methodi = 1; methodi < methods.length; methodi++) {
+                let cmd = splitCommand(methods[methodi])
+                
+                let isKey = cmd.length == 1 &&
+                    (!isBrackets(cmd[0]) && !isCurlyBrackets(cmd[0]) && !isSquareBrackets(cmd[0]));
+                
+                let type = "unknown";
+                
+                if (isKey) { type = "key"; }
+                
+                switch (type) {
+                    case "key":
+                        ast["list"].push({
+                            "id": "get_key",
+                            "key": cmd[0]
+                        })
+                        break
+                }
+            }
+            return ast;
+        }
+
         // constants
         switch (item) {
             case "true":
@@ -1112,10 +1145,6 @@
             ast["keys"] = keys
             return ast;
         }
-        
-        if (isBrackets(item)) {
-            return generateAstArgument(removeBraces(item))
-        }
 
         if (isCurlyBrackets(item)) {
             let obj = {
@@ -1142,14 +1171,22 @@
             }
             return arr;
         }
-
+        
+        if (isBrackets(item)) {
+            return generateAstArgument(removeBraces(item))
+        }
+        
         if (flags.includes("standalone")) {
             return {}
         }
-        return {
-            "id": "reference",
-            "key": item
-        };
+        if (isValidReference(item)) {
+            return {
+                "id": "reference",
+                "key": item
+            };
+        } else {
+            console.warn("unexpected argument '" + item + "'");
+        }
     }
     
     function generateAst(code) {
@@ -1284,6 +1321,70 @@
         }
     }
 
+    function getKey(val,keys) {
+        switch (val[1]) {
+            case "object":
+                for (let key of keys) {
+                    key["value"] = runArgument(key["value"]);
+                    switch (key["type"]) {
+                        case "key":
+                            switch (key["value"][1]) {
+                                case "string":
+                                    if (Object.keys(val[0]).includes(key["value"][0])) {
+                                        val = runArgument(val[0][key["value"][0]])
+                                    } else {
+                                        return [null,"null"]
+                                    }
+                                    break;
+                                default:
+                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
+                                    return [null,"null"]
+                            }
+                            break;
+                        default:
+                            console.warn("unknown key type '" + key["type"] + "'")
+                            return [null,"null"]
+                    }
+                }
+                break
+            case "array": case "string":
+                for (let key of keys) {
+                    key["value"] = runArgument(key["value"]);
+                    switch (key["type"]) {
+                        case "key":
+                            switch (key["value"][1]) {
+                                case "number":
+                                    if (Object.keys(val[0]).includes((key["value"][0]-1).toString())) {
+                                        let v = val[0][key["value"][0]-1];
+                                        
+                                        // "string"[index]
+                                        if (val[1] == "string") {
+                                            v = [v,"string"]
+                                        }
+                                        
+                                        val = runArgument(v)
+                                    } else {
+                                        return [null,"null"]
+                                    }
+                                    break;
+                                default:
+                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
+                                    return [null,"null"]
+                            }
+                            break;
+                        default:
+                            console.warn("unknown key type '" + key["type"] + "'")
+                            return [null,"null"]
+                    }
+                }
+                break
+            default:
+                console.warn("cant get item from type '" + val[1] + "'");
+                return [null,"null"]
+        }
+        return val;
+    }
+    
     function runArgument(content, ctx) {
         if (typeof (content) === 'object' && !Array.isArray(content)) {
             switch (content["id"]) {
@@ -1328,66 +1429,19 @@
                     }
                     return [arr, "array"];
                 case "key_get":
+                    return getKey(runArgument(content["value"]), content["keys"]);
+                case "methods":
                     if (true) {
-                        let val = runArgument(content["value"]);
-                        switch (val[1]) {
-                            case "object":
-                                for (let key of content["keys"]) {
-                                    key["value"] = runArgument(key["value"]);
-                                    switch (key["type"]) {
-                                        case "key":
-                                            switch (key["value"][1]) {
-                                                case "string":
-                                                    if (Object.keys(val[0]).includes(key["value"][0])) {
-                                                        val = runArgument(val[0][key["value"][0]])
-                                                    } else {
-                                                        return [null,"null"]
-                                                    }
-                                                    break;
-                                                default:
-                                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
-                                            }
-                                            break;
-                                        default:
-                                            console.warn("unknown key type '" + key["type"] + "'")
-                                    }
-                                }
-                                break
-                            case "array": case "string":
-                                for (let key of content["keys"]) {
-                                    key["value"] = runArgument(key["value"]);
-                                    switch (key["type"]) {
-                                        case "key":
-                                            switch (key["value"][1]) {
-                                                case "number":
-                                                    if (Object.keys(val[0]).includes((key["value"][0]-1).toString())) {
-                                                        let v = val[0][key["value"][0]-1];
-                                                        if (val[1] == "string") {
-                                                            v = [v,"string"]
-                                                        }
-                                                        val = runArgument(v)
-                                                    } else {
-                                                        return [null,"null"]
-                                                    }
-                                                    break;
-                                                default:
-                                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
-                                                    return [null,"null"]
-                                            }
-                                            break;
-                                        default:
-                                            console.warn("unknown key type '" + key["type"] + "'")
-                                            return [null,"null"]
-                                    }
-                                }
-                                break
-                            default:
-                                console.warn("cant get item from type '" + val[1] + "'");
-                                return [null,"null"]
+                        let value = runArgument(content["value"])
+                        
+                        for (let method of content["list"]) {
+                            switch (method["id"]) {
+                                case "get_key":
+                                    value = runArgument(getKey(value, [{"type":"key","value":[method["key"],"string"]}]))
+                            }
                         }
-                        return val;
+                        return value;
                     }
-                    break
                 default:
                     console.warn("unknown arg type '" + content["id"] + "'")
             }
