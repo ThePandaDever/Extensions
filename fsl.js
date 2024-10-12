@@ -1250,13 +1250,13 @@
     }
 
     function runCommand(content, ctx) {
-        switch (content["type"]) {
+        switch (content.type) {
             case "command":
-                switch (content["id"]) {
+                switch (content.id) {
                     case "print":
                         let str = "";
-                        let i = content["args"].length;
-                        for (let arg of content["args"]) {
+                        let i = content.args.length;
+                        for (let arg of content.args) {
                             i--;
                             if (i == 0) {
                                 str += getStr(runArgument(arg, ctx));
@@ -1267,30 +1267,40 @@
                         console.log(str.trim());
                         break
                     case "log":
-                        console.log(runArgument(content["args"][0],ctx)[0])
+                        console.log(runArgument(content.args[0],ctx)[0])
+                        break
                     case "api_call":
                         if (content.args.length != 3) {return}
-                        switch (content["args"]) {
-                            case "file":
-                                break
-                            default:
-                                api_call()
-                        }
+                        
+                        let api = runArgument(content.args[0]);
+                        let api_cmd = runArgument(content.args[1]);
+                        let api_data = runArgument(content.args[2])
+                        
+                        if (api[1] != "string") { return }
+                        if (api_cmd[1] != "string") { return }
+                        if (api_data[1] != "object") { return }
+                        
+                        api_call(
+                            api[0],
+                            api_cmd[0],
+                            api_data[0]
+                        );
+                        
                         break
                     default:
-                        if (Object.keys(ctx.functions).includes(content["id"])) {
+                        if (Object.keys(ctx.functions).includes(content.id)) {
                             let scope = {};
                             if (content.args.length > 0) {
-                                let fn = ctx.functions[content["id"]];
+                                let fn = ctx.functions[content.id];
                                 for (let i = 0; i < fn["arg_map"].length; i++) {
                                     let k = fn["arg_map"][i];
-                                    let v = runArgument(content["args"][i], ctx)
+                                    let v = runArgument(content.args[i], ctx)
                                     scope[k] = v;
                                 }
                             }
-                            runFunction(ctx.ast, content["id"], scope)
+                            runFunction(ctx.ast, content.id, scope)
                         } else {
-                            console.warn("unknown function '" + content["id"] + "'");
+                            console.warn("unknown function '" + content.id + "'");
                         }
                         break
                 }
@@ -1300,7 +1310,7 @@
                     console.warn("ctx missing scope key.");
                     return;
                 }
-                ctx.scope[content["key"]] = runArgument(content["value"], ctx)
+                ctx.scope[content.key] = runArgument(content.value, ctx)
                 break
         }
     }
@@ -1371,6 +1381,7 @@
     }
     
     function runArgument(content, ctx) {
+        console.log(content);
         if (content.length == 3) {
             switch (content[2]["type"]) {
                 case "FSLOBJECT":
