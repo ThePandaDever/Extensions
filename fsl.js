@@ -1257,6 +1257,11 @@
         }
 
         let fn = functions[func];
+
+        scope["fsl"] = [{
+            
+        },"object",{"type":"FSLOBJECT"}]
+        
         let ctx = {
             "functions": functions,
             "ast": ast,
@@ -1284,6 +1289,8 @@
                         }
                         console.log(str.trim());
                         break
+                    case "log":
+                        console.log(runArgument(content["args"][0],ctx)[0])
                     case "api_call":
                         if (content.args.length != 3) {return}
                         switch (content["args"]) {
@@ -1300,7 +1307,7 @@
                                 let fn = ctx.functions[content["id"]];
                                 for (let i = 0; i < fn["arg_map"].length; i++) {
                                     let k = fn["arg_map"][i];
-                                    let v = runArgument(content["args"][i])
+                                    let v = runArgument(content["args"][i], ctx)
                                     scope[k] = v;
                                 }
                             }
@@ -1321,17 +1328,17 @@
         }
     }
 
-    function getKey(val,keys) {
+    function getKey(val,keys,ctx) {
         switch (val[1]) {
             case "object":
                 for (let key of keys) {
-                    key["value"] = runArgument(key["value"]);
+                    key["value"] = runArgument(key["value"], ctx);
                     switch (key["type"]) {
                         case "key":
                             switch (key["value"][1]) {
                                 case "string":
                                     if (Object.keys(val[0]).includes(key["value"][0])) {
-                                        val = runArgument(val[0][key["value"][0]])
+                                        val = runArgument(val[0][key["value"][0]], ctx)
                                     } else {
                                         return [null,"null"]
                                     }
@@ -1349,7 +1356,7 @@
                 break
             case "array": case "string":
                 for (let key of keys) {
-                    key["value"] = runArgument(key["value"]);
+                    key["value"] = runArgument(key["value"], ctx);
                     switch (key["type"]) {
                         case "key":
                             switch (key["value"][1]) {
@@ -1362,7 +1369,7 @@
                                             v = [v,"string"]
                                         }
                                         
-                                        val = runArgument(v)
+                                        val = runArgument(v, ctx)
                                     } else {
                                         return [null,"null"]
                                     }
@@ -1371,13 +1378,14 @@
                                     console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
                                     return [null,"null"]
                             }
-                            break;
                         default:
                             console.warn("unknown key type '" + key["type"] + "'")
                             return [null,"null"]
                     }
                 }
                 break
+            case "null":
+                return [null,"null"]
             default:
                 console.warn("cant get item from type '" + val[1] + "'");
                 return [null,"null"]
@@ -1411,8 +1419,26 @@
                     if (!Object.keys(ctx).includes("scope")) {
                         console.warn("ctx missing scope key.");
                         return;
+                    } else {
+                        if (!Object.keys(ctx.scope).includes(content["key"])) {
+                            console.warn("unknown reference '" + content["key"] + "'");
+                            return [null,"null"]
+                        } else {
+                            let val = ctx.scope[content["key"]];
+                            
+                            if (val.length == 3) {
+                                switch (val[2]["type"]) {
+                                    case "FSLOBJECT":
+                                        let fsl_object = [{
+                                            "scope": [ctx.scope, "object"]
+                                        }, "object"]
+                                        val = fsl_object
+                                }
+                            }
+                            
+                            return val;
+                        }
                     }
-                    return ctx.scope[content["key"]];
                 case "object":
                     let obj = {};
                     let keys = content["keys"];
@@ -1429,15 +1455,15 @@
                     }
                     return [arr, "array"];
                 case "key_get":
-                    return getKey(runArgument(content["value"]), content["keys"]);
+                    return getKey(runArgument(content["value"], ctx), content["keys"], ctx);
                 case "methods":
                     if (true) {
-                        let value = runArgument(content["value"])
+                        let value = runArgument(content["value"], ctx)
                         
                         for (let method of content["list"]) {
                             switch (method["id"]) {
                                 case "get_key":
-                                    value = runArgument(getKey(value, [{"type":"key","value":[method["key"],"string"]}]))
+                                    value = runArgument(getKey(value, [{"type":"key","value":[method["key"],"string"]}], ctx), ctx)
                             }
                         }
                         return value;
