@@ -462,109 +462,84 @@
     }
 
     function splitSegment(input) {
-        const result = [];
-        let currentPart = '';
-        let braceCount = 0;
-        let i = 0;
-        let cmddepth = 0;
-        let insideQuotes = false;
-        // Track if we are inside quotes
-        let quoteType = '';
-        // Track the type of quote (either ' or ")
-        let insideComment = false;
-        // Track if we're inside a comment
+        let result = [];
+        let current = "";
+        
+        let inSingleQuotes = false;
+        let inDoubleQuotes = false;
+        
+        let bracketDepth = 0;
+        let squareDepth = 0;
+        let curlyDepth = 0;
+        
+        for (let char of input) {
+            if (char == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
+            }
+            if (char == "'" && !inDoubleQuotes) {
+                inSingleQuotes = !inSingleQuotes;
+            }
 
-        while (i < input.length) {
-            const char = input[i];
-            const nextChar = i + 1 < input.length ? input[i + 1] : '';
+            let inAnyQuotes = inSingleQuotes || inDoubleQuotes;
 
-            // Check if we are entering a comment (i.e., encountering //)
-            if (!insideQuotes && char === '/' && nextChar === '/' && !insideComment) {
-                // If there's current part content, finalize it before starting the comment
-                if (currentPart.trim()) {
-                    result.push(currentPart.trim());
-                    currentPart = '';
+            if (!inAnyQuotes) {
+                switch (char) {
+                    case "{":
+                        curlyDepth ++;
+                        current += char;
+                        break
+                    case "}":
+                        curlyDepth --;
+                        current += char;
+                        if (bracketDepth == 0 && curlyDepth == 0 && squareDepth == 0) {
+                            if (current) {
+                                result.push(current.trim());
+                                current = "";
+                            }
+                        }
+                        break;
+                        
+                    case "[":
+                        squareDepth ++;
+                        current += char;
+                        break
+                    case "]":
+                        squareDepth --;
+                        current += char;
+                        break;
+                        
+                    case "(":
+                        bracketDepth ++;
+                        current += char;
+                        break
+                    case ")":
+                        bracketDepth --;
+                        current += char;
+                        break;
+                    
+                    case ";":
+                        if (bracketDepth == 0 && curlyDepth == 0 && squareDepth == 0) {
+                            if (current) {
+                                result.push(current.trim());
+                                current = "";
+                            }
+                        } else {
+                            current += char;
+                        }
+                        break
+                    
+                    default:
+                        current += char;
                 }
-                insideComment = true;
+            } else {
+                current += char;
             }
-
-            // Handle being inside a comment
-            if (insideComment) {
-                currentPart += char;
-                i++;
-
-                // If we encounter a newline or reach the end of input, finalize the comment
-                if (char === '\n' || i >= input.length) {
-                    result.push(currentPart.trim());
-                    currentPart = '';
-                    insideComment = false;
-                }
-
-                continue;
-            }
-
-            // Check for the start of a quote
-            if (char === '"' || char === "'") {
-                // If we're not already inside quotes, enter quotes
-                if (!insideQuotes) {
-                    insideQuotes = true;
-                    quoteType = char;
-                    // Remember the type of quote
-                } else if (char === quoteType) {
-                    // If we encounter the same type of quote, exit quotes
-                    insideQuotes = false;
-                }
-            }
-
-            // Ignore whitespace when inside quotes
-            if (insideQuotes) {
-                currentPart += char;
-                // Just add the character
-                i++;
-                continue;
-                // Skip the rest of the loop for this iteration
-            }
-
-            // Collect the characters for the current command/block
-            currentPart += char;
-            
-            // Handle braces outside of quotes
-            if (char === '{' && cmddepth == 0) {
-                braceCount++;
-            } else if (char === '}' && cmddepth == 0) {
-                braceCount--;
-                if (braceCount == 0) {
-                    result.push(currentPart.trim())
-                    currentPart = ""
-                }
-            }
-
-            if (char == "(" && braceCount == 0) {
-                cmddepth++;
-            } else if (char == ")" && braceCount == 0) {
-                cmddepth--;
-            }
-
-
-            // If we've closed a code block, finalize the current part
-
-            // If we reach a semicolon outside of any block, finalize the statement
-            if (char === ';' && braceCount === 0 && cmddepth == 0) {
-                if (result[result.length-1] != "") {
-                    result.push(currentPart.trim().replace(/;$/, ''));
-                }
-                currentPart = '';
-            }
-
-            // Move to the next character
-            i++;
         }
-
-        // Push any remaining part that wasn't processed (in case there is leftover code)
-        if (currentPart.trim()) {
-            result.push(currentPart.trim().replace(/;$/, ''));
-            // Remove semicolon if present
+        
+        if (current) {
+            result.push(current.trim());
         }
+        
         return result;
     }
 
@@ -912,7 +887,7 @@
     }
 
     function generateAstSegmentItem(content, raw) {
-        let ast = null;
+        let ast = {};
 
         if (content.length == 2) {
             if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
@@ -938,7 +913,7 @@
         if (Object.keys(ast).length == 0) {
             if (raw != "") {
                 console.warn("unexpected tokens '", raw, "'");
-                ast = null;
+                ast = {};
             }
         }
         return ast;
@@ -1051,20 +1026,8 @@
             let i = 0;
             while (i < operators.length) {
                 switch (operators[i]) {
-                    case "+":
-                        data.push("+");
-                        break
-                    case "++":
-                        data.push("++");
-                        break
-                    case "-":
-                        data.push("-");
-                        break
-                    case "*":
-                        data.push("*");
-                        break
-                    case "/":
-                        data.push("/");
+                    case "+": case "++": case "-": case "*": case "/":
+                        data.push(operators[i]);
                         break
                     default:
                         data.push(generateAstArgument(operators[i]));
@@ -1090,16 +1053,31 @@
                 
                 let isKey = cmd.length == 1 &&
                     (!isBrackets(cmd[0]) && !isCurlyBrackets(cmd[0]) && !isSquareBrackets(cmd[0]));
+                let isMethod = cmd.length == 2 &&
+                    (!isBrackets(cmd[0]) && !isCurlyBrackets(cmd[0]) && !isSquareBrackets(cmd[0])) &&
+                    (isBrackets(cmd[1]) && !isCurlyBrackets(cmd[1]) && !isSquareBrackets(cmd[1]));
                 
                 let type = "unknown";
                 
                 if (isKey) { type = "key"; }
+                if (isMethod) { type = "method"; }
                 
                 switch (type) {
                     case "key":
                         ast["list"].push({
                             "id": "get_key",
                             "key": cmd[0]
+                        })
+                        break
+                    case "method":
+                        ast["list"].push({
+                            "id": "method",
+                            "key": cmd[0],
+                            "data": generateAstArguments(
+                                splitCommandParams(
+                                    removeBraces(cmd[1])
+                                )
+                            )
                         })
                         break
                 }
@@ -1206,7 +1184,6 @@
                     if (def.length == 2) {
                         content = splitSegment(removeCurlyBraces(def[1]));
                     }
-
                     let ast_fn = generateAstFunction(content);
 
                     if (defcmd.length == 2) {
@@ -1394,6 +1371,15 @@
     }
     
     function runArgument(content, ctx) {
+        if (content.length == 3) {
+            switch (content[2]["type"]) {
+                case "FSLOBJECT":
+                    let fsl_object = [{
+                        "scope": [ctx.scope, "object"]
+                    }, "object"]
+                    return fsl_object
+            }
+        }
         if (typeof (content) === 'object' && !Array.isArray(content)) {
             switch (content["id"]) {
                 case "operation":
@@ -1426,17 +1412,7 @@
                         } else {
                             let val = ctx.scope[content["key"]];
                             
-                            if (val.length == 3) {
-                                switch (val[2]["type"]) {
-                                    case "FSLOBJECT":
-                                        let fsl_object = [{
-                                            "scope": [ctx.scope, "object"]
-                                        }, "object"]
-                                        val = fsl_object
-                                }
-                            }
-                            
-                            return val;
+                            return runArgument(val,ctx);
                         }
                     }
                 case "object":
@@ -1546,7 +1522,7 @@
                 case "object":
                     return JSON.stringify(value[0]);
             }
-            return value[0];
+            return value[0].toString();
         }
         return null;
     }
