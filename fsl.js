@@ -1389,7 +1389,7 @@
                         
                         let api = runArgument(content.args[0]);
                         let api_cmd = runArgument(content.args[1]);
-                        let api_data = runArgument(content.args[2])
+                        let api_data = runArgument(content.args[2]);
                         
                         if (api[1] != "string") { return }
                         if (api_cmd[1] != "string") { return }
@@ -1399,6 +1399,27 @@
                             api[0],
                             api_cmd[0],
                             api_data[0]
+                        );
+                        
+                        break
+                    case "file_call":
+                        if (content.args.length != 4) {return}
+                        
+                        let file_cmd = runArgument(content.args[0]);
+                        let file_path = runArgument(content.args[1]);
+                        let file_data = runArgument(content.args[2]);
+                        let file_path2 = runArgument(content.args[3]);
+                        
+                        if (file_cmd[1] != "string") { return }
+                        if (file_path[1] != "string") { return }
+                        if (file_data[1] != "object") { return }
+                        if (file_path2[1] != "string") { return }
+                        
+                        file_call(
+                            file_cmd[0],
+                            file_path[0],
+                            file_data[0],
+                            file_path2[0]
                         );
                         
                         break
