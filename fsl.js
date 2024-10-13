@@ -163,14 +163,6 @@
       return newObj;
     }
 
-    function deStr(str) {
-        // Check if the string starts and ends with the same type of quotes
-        if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
-            // Remove the surrounding quotes by slicing the string
-            return str.slice(1, -1);
-        }
-        return str; // Return the original string if no surrounding quotes are found
-    }
 
     function splitLogic(input) {
         const result = [];
@@ -248,7 +240,6 @@
 
         return result;
     }
-
     function splitOperators(input) {
         const operators = /(\+{1,2}|-|\*|\/)/;
         const result = [];
@@ -313,7 +304,6 @@
         }
         return result;
     }
-
     function splitComparsion(input) {
         const operators = /(==|!=|~=|\?=|>=|<=)/;
         const result = [];
@@ -382,7 +372,6 @@
         }
         return result;
     }
-
     function splitStatement(input) {
         const result = [];
         let currentPart = '';
@@ -469,7 +458,6 @@
         }
         return result;
     }
-
     function splitSegment(input) {
         let result = [];
         let current = "";
@@ -551,7 +539,6 @@
         
         return result;
     }
-
     function splitAssignment(str) {
         let insideQuotes = false;
         let insideBrackets = 0;
@@ -596,7 +583,6 @@
         // If no '=' is found, return the original string and an empty string
         return [];
     }
-
     function splitCharedCommand(str, chr) {
         const result = [];
         let buffer = '';
@@ -673,7 +659,6 @@
 
         return result;
     }
-
     function splitCommand(input) {
         const result = [];
         let currentPart = '';
@@ -732,7 +717,6 @@
         
         return result;
     }
-
     function splitReferences(str) {
         const result = [];
         let buffer = '';
@@ -808,7 +792,6 @@
 
         return result;
     }
-
     function splitCommandParams(input) {
         const result = [];
         let currentSegment = '';
@@ -883,7 +866,6 @@
 
         return ast;
     }
-
     function generateAstSegment(content) {
         let ast = []
         for (let segment_i = 0; segment_i < content.length; segment_i++) {
@@ -894,7 +876,6 @@
         }
         return ast;
     }
-
     function generateAstSegmentItem(content, raw) {
         let ast = {};
 
@@ -927,7 +908,6 @@
         }
         return ast;
     }
-
     function generateAstCommand(item) {
         let ast = {};
 
@@ -937,7 +917,6 @@
 
         return ast;
     }
-
     function generateAstStatement(item) {
         let ast = {};
 
@@ -952,7 +931,6 @@
 
         return ast;
     }
-
     function generateAstArguments(args) {
         let arr = [];
         for (let arg of args) {
@@ -960,7 +938,6 @@
         }
         return arr;
     }
-
     function generateAstArgument(item, flags) {
         if (typeof (flags) != 'object') {
             flags = []
@@ -1175,7 +1152,6 @@
             console.warn("unexpected argument '" + item + "'");
         }
     }
-    
     function generateAst(code) {
         let ast = {
             "functions": {},
@@ -1252,6 +1228,112 @@
         asts[key] = generateAst(fsl);
         return asts[key];
     }
+    function getKey(val,keys,ctx) {
+        switch (val[1]) {
+            case "object":
+                for (let key of keys) {
+                    key["value"] = runArgument(key["value"], ctx);
+                    switch (key["type"]) {
+                        case "key":
+                            switch (key["value"][1]) {
+                                case "string":
+                                    if (Object.keys(val[0]).includes(key["value"][0])) {
+                                        val = runArgument(val[0][key["value"][0]], ctx)
+                                    } else {
+                                        return [null,"null"]
+                                    }
+                                    break;
+                                default:
+                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
+                                    return [null,"null"]
+                            }
+                            break;
+                        default:
+                            console.warn("unknown key type '" + key["type"] + "'")
+                            return [null,"null"]
+                    }
+                }
+                break
+            case "array": case "string":
+                for (let key of keys) {
+                    key["value"] = runArgument(key["value"], ctx);
+                    switch (key["type"]) {
+                        case "key":
+                            switch (key["value"][1]) {
+                                case "number":
+                                    if (Object.keys(val[0]).includes((key["value"][0]-1).toString())) {
+                                        let v = val[0][key["value"][0]-1];
+                                        
+                                        // "string"[index]
+                                        if (val[1] == "string") {
+                                            v = [v,"string"]
+                                        }
+                                        
+                                        val = runArgument(v, ctx)
+                                    } else {
+                                        return [null,"null"]
+                                    }
+                                    break;
+                                default:
+                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
+                                    return [null,"null"]
+                            }
+                        default:
+                            console.warn("unknown key type '" + key["type"] + "'")
+                            return [null,"null"]
+                    }
+                }
+                break
+            case "null":
+                return [null,"null"]
+            default:
+                console.warn("cant get item from type '" + val[1] + "'");
+                return [null,"null"]
+        }
+        return val;
+    }
+    function getStr(value, ctx) {
+        if (Array.isArray(value)) {
+            switch (value[1]) {
+                case "array":
+                case "object":
+                    return JSON.stringify(value[0]);
+            }
+            return value[0].toString();
+        }
+        return null;
+    }
+    function deStr(str) {
+        // Check if the string starts and ends with the same type of quotes
+        if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+            // Remove the surrounding quotes by slicing the string
+            return str.slice(1, -1);
+        }
+        return str; // Return the original string if no surrounding quotes are found
+    }
+    
+    function loadModulesIntoScope(scope, ast) {
+        let flipped_externals_ref = Object.flip(ast.externals_ref);
+        
+        for (let external of Object.keys(flipped_externals_ref)) {
+            let ext_ast = ast.externals[external];
+            let ext = {}
+            
+            for (let func of Object.keys(ext_ast.functions)) {
+                let ext_fn = ext_ast.functions[func]
+                ext[func] = [
+                    ext_fn
+                ,"function"]
+            }
+            
+            let flipped_moduless_ref = Object.flip(ext_ast.externals_ref);
+            
+            ext = loadModulesIntoScope(ext, ext_ast)
+            
+            scope[flipped_externals_ref[external]] = [ext, "module"]
+        }
+        return scope
+    }
 
     function runFunction(ast, func, scope = {}) {
         if (typeof (ast) != "object") {
@@ -1282,30 +1364,6 @@
             runCommand(content, ctx);
         }
     }
-
-    function loadModulesIntoScope(scope, ast) {
-        let flipped_externals_ref = Object.flip(ast.externals_ref);
-        
-        for (let external of Object.keys(flipped_externals_ref)) {
-            let ext_ast = ast.externals[external];
-            let ext = {}
-            
-            for (let func of Object.keys(ext_ast.functions)) {
-                let ext_fn = ext_ast.functions[func]
-                ext[func] = [
-                    ext_fn
-                ,"function"]
-            }
-            
-            let flipped_moduless_ref = Object.flip(ext_ast.externals_ref);
-            
-            ext = loadModulesIntoScope(ext, ext_ast)
-            
-            scope[flipped_externals_ref[external]] = [ext, "module"]
-        }
-        return scope
-    }
-
     function runCommand(content, ctx) {
         switch (content.type) {
             case "command":
@@ -1371,72 +1429,6 @@
                 break
         }
     }
-
-    function getKey(val,keys,ctx) {
-        switch (val[1]) {
-            case "object":
-                for (let key of keys) {
-                    key["value"] = runArgument(key["value"], ctx);
-                    switch (key["type"]) {
-                        case "key":
-                            switch (key["value"][1]) {
-                                case "string":
-                                    if (Object.keys(val[0]).includes(key["value"][0])) {
-                                        val = runArgument(val[0][key["value"][0]], ctx)
-                                    } else {
-                                        return [null,"null"]
-                                    }
-                                    break;
-                                default:
-                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
-                                    return [null,"null"]
-                            }
-                            break;
-                        default:
-                            console.warn("unknown key type '" + key["type"] + "'")
-                            return [null,"null"]
-                    }
-                }
-                break
-            case "array": case "string":
-                for (let key of keys) {
-                    key["value"] = runArgument(key["value"], ctx);
-                    switch (key["type"]) {
-                        case "key":
-                            switch (key["value"][1]) {
-                                case "number":
-                                    if (Object.keys(val[0]).includes((key["value"][0]-1).toString())) {
-                                        let v = val[0][key["value"][0]-1];
-                                        
-                                        // "string"[index]
-                                        if (val[1] == "string") {
-                                            v = [v,"string"]
-                                        }
-                                        
-                                        val = runArgument(v, ctx)
-                                    } else {
-                                        return [null,"null"]
-                                    }
-                                    break;
-                                default:
-                                    console.warn("cant get '" + key["value"][1] + "' as key in '" + val[1] + "'")
-                                    return [null,"null"]
-                            }
-                        default:
-                            console.warn("unknown key type '" + key["type"] + "'")
-                            return [null,"null"]
-                    }
-                }
-                break
-            case "null":
-                return [null,"null"]
-            default:
-                console.warn("cant get item from type '" + val[1] + "'");
-                return [null,"null"]
-        }
-        return val;
-    }
-    
     function runArgument(content, ctx) {
         if (content.length == 3) {
             switch (content[2]["type"]) {
@@ -1521,7 +1513,6 @@
             return content;
         }
     }
-
     function runMath(op, a, b) {
         switch (op) {
             case "+":
@@ -1551,7 +1542,6 @@
                 break
         }
     }
-
     function runComparison(op, a, b) {
         switch (op) {
             case "equal":
@@ -1583,18 +1573,6 @@
         return [null, "null"]
     }
 
-    function getStr(value, ctx) {
-        if (Array.isArray(value)) {
-            switch (value[1]) {
-                case "array":
-                case "object":
-                    return JSON.stringify(value[0]);
-            }
-            return value[0].toString();
-        }
-        return null;
-    }
-
     function api_call(api,command,data) {
         if (!Object.keys(api_requests).includes(api)) {api_requests[api] = []}
         api_requests[api].push({
@@ -1603,7 +1581,6 @@
         });
         Scratch.vm.runtime.startHats('fsl_hatApiRequest');
     }
-
     function file_call(type, path, data, path2) {
         file_requests.push({
             "type":type,
