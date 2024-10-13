@@ -5,6 +5,8 @@
     var file_requests = [];
     var file_system = {};
 
+    var local_system = {};
+
     var api_requests = {};
     var api_data = {};
     
@@ -132,27 +134,34 @@
     }
     // id be dead if mist didnt make this :pray:
     Object.isSame = function (obj1,obj2) {
-    if (typeof obj1 === "object" && typeof obj2 === "object") {
-        if (obj1 === obj2) return true;
-
-        let obj1Keys = Object.keys(obj1);
-        let obj2Keys = Object.keys(obj2);
-        if (obj1Keys.length !== obj2Keys.length) return false;
-
-        for (let key of obj2Keys) {
-          if (!obj1Keys.includes(key)) return false;
-          const obj1Type = typeof obj1[key];
-          const obj2Type = typeof obj2[key];
-          if (obj1Type !== obj2Type) return false;
-          if (obj1Type === "object" && obj2Type === "object") {
-            if (!Object.isSame(obj1[key], obj2[key])) return false;
-          } else if (obj1[key] !== obj2[key]) return false;
+        if (typeof obj1 === "object" && typeof obj2 === "object") {
+            if (obj1 === obj2) return true;
+    
+            let obj1Keys = Object.keys(obj1);
+            let obj2Keys = Object.keys(obj2);
+            if (obj1Keys.length !== obj2Keys.length) return false;
+    
+            for (let key of obj2Keys) {
+              if (!obj1Keys.includes(key)) return false;
+              const obj1Type = typeof obj1[key];
+              const obj2Type = typeof obj2[key];
+              if (obj1Type !== obj2Type) return false;
+              if (obj1Type === "object" && obj2Type === "object") {
+                if (!Object.isSame(obj1[key], obj2[key])) return false;
+              } else if (obj1[key] !== obj2[key]) return false;
+            }
+            return true;
+        } else {
+            return false;
         }
-        return true;
-    } else {
-        return false;
     }
-}
+    Object.flip = function (obj) {
+      let newObj = {};
+      for (let key in obj) {
+        newObj[obj[key]] = key;
+      }
+      return newObj;
+    }
 
     function deStr(str) {
         // Check if the string starts and ends with the same type of quotes
@@ -1169,7 +1178,9 @@
     
     function generateAst(code) {
         let ast = {
-            "functions": {}
+            "functions": {},
+            "externals": {},
+            "externals_ref": {}
         };
 
         let topLayer = splitSegment(code);
@@ -1179,6 +1190,26 @@
             let defspaced = defcmd[0].split(" ");
 
             switch (defspaced[0]) {
+                case "import":
+                    if (defspaced.length > 1) {
+                        let id = defspaced[1];
+                        if (Object.keys(local_system).includes(id)) {
+                            if (defspaced.length == 2) {
+                                ast["externals"][id] = generateAst(local_system[id]);
+                                ast["externals_ref"][id] = id;
+                            } else if (defspaced.length == 4) {
+                                if (defspaced[2] == "as") {
+                                    ast["externals"][id] = generateAst(local_system[id]);
+                                    ast["externals_ref"][defspaced[3]] = id;
+                                } else {
+                                    console.warn("unknown import syntax '" + defspaced.join(" ") + "'");
+                                }
+                            }
+                        } else {
+                            console.warn("unknown module '" + defspaced[1] + "'");
+                        }
+                    }
+                    break
                 case "fn":
                     let content = []
                     if (def.length == 2) {
@@ -1238,15 +1269,41 @@
         scope["fsl"] = [{
             
         },"object",{"type":"FSLOBJECT"}]
+
+        scope = loadModulesIntoScope(scope, ast);
         
         let ctx = {
             "functions": functions,
             "ast": ast,
             "scope": scope
         };
+        
         for (let content of fn["content"]) {
             runCommand(content, ctx);
         }
+    }
+
+    function loadModulesIntoScope(scope, ast) {
+        let flipped_externals_ref = Object.flip(ast.externals_ref);
+        
+        for (let external of Object.keys(flipped_externals_ref)) {
+            let ext_ast = ast.externals[external];
+            let ext = {}
+            
+            for (let func of Object.keys(ext_ast.functions)) {
+                let ext_fn = ext_ast.functions[func]
+                ext[func] = [
+                    ext_fn
+                ,"function"]
+            }
+            
+            let flipped_moduless_ref = Object.flip(ext_ast.externals_ref);
+            
+            ext = loadModulesIntoScope(ext, ext_ast)
+            
+            scope[flipped_externals_ref[external]] = [ext, "module"]
+        }
+        return scope
     }
 
     function runCommand(content, ctx) {
@@ -1385,7 +1442,8 @@
             switch (content[2]["type"]) {
                 case "FSLOBJECT":
                     let fsl_object = [{
-                        "scope": [ctx.scope, "object"]
+                        "scope": [ctx.scope, "object"],
+                        "ast": [ctx.ast, "object"]
                     }, "object"]
                     return fsl_object
             }
@@ -1599,10 +1657,16 @@
                             fsl: { type: ArgumentType.STRING, defaultValue: 'fn main() { print("hello world") }' }
                         }
                     },
+                    "---",
                     {
-                        blockType: Scratch.BlockType.LABEL,
-                        text: "Listeners"
+                        opcode: "localUpdate",
+                        blockType: BlockType.COMMAND,
+                        text: "Set Local System to [data]",
+                        arguments: {
+                            data: { type: ArgumentType.STRING, defaultValue: '{}' }
+                        }
                     },
+                    { blockType: Scratch.BlockType.LABEL, text: "File System" },
                     {
                         opcode: "hatFileRequest",
                         blockType: BlockType.EVENT,
@@ -1620,6 +1684,7 @@
                             path2: { type: ArgumentType.STRING, defaultValue: 'myfile2.txt' },
                         }
                     },
+                    "---",
                     {
                         opcode: "fileRequestData",
                         blockType: BlockType.REPORTER,
@@ -1644,6 +1709,7 @@
                             representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation' },
                         }
                     },
+                    "---",
                     {
                         opcode: "filePop",
                         blockType: BlockType.COMMAND,
@@ -1662,7 +1728,7 @@
                             system: { type: ArgumentType.STRING, defaultValue: '{}' }
                         }
                     },
-                    "---",
+                    { blockType: Scratch.BlockType.LABEL, text: "APIs" },
                     {
                         opcode: "hatApiRequest",
                         blockType: BlockType.EVENT,
@@ -1679,6 +1745,7 @@
                             data: { type: ArgumentType.STRING, defaultValue: '{}' },
                         }
                     },
+                    "---",
                     {
                         opcode: "apiRequestData",
                         blockType: BlockType.REPORTER,
@@ -1714,6 +1781,7 @@
                             representation: { type: ArgumentType.STRING, defaultValue: 'json', menu: 'objRepresentation' },
                         }
                     },
+                    "---",
                     {
                         opcode: "apiPop",
                         blockType: BlockType.COMMAND,
@@ -1799,6 +1867,14 @@
             let ast = generateAst(fsl);
             console.log("ast:", ast);
             return JSON.stringify(ast);
+        }
+
+        localUpdate({ data }) {
+            if (typeof(data) === 'string') {
+                data = JSON.parse(data);
+            }
+            
+            local_system = data;
         }
 
         fileRequestCreate({ type, path, data, path2 }) {
