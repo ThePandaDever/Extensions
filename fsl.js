@@ -1521,6 +1521,13 @@
                             switch (method["id"]) {
                                 case "get_key":
                                     value = runArgument(getKey(value, [{"type":"key","value":[method["key"],"string"]}], ctx), ctx)
+                                    break
+                                case "method":
+                                    value = runMethod(value, method);
+                                    break
+                                default:
+                                    console.warn("unknown method type '" + method["id"] + "'")
+                                    break
                             }
                         }
                         return value;
@@ -1532,6 +1539,23 @@
 
         if (Array.isArray(content)) {
             return content;
+        }
+    }
+    function runMethod(value, method) {
+        switch (value[0]) {
+            case "string":
+                switch (method["key"]) {
+                    case "upper":
+                        if (method["data"].length != 0) { console.warn("method '" + method["key"] + "' doesnt take " + method["data"].length + " argument(s)"); break }
+                        break
+                    default:
+                        console.warn("method '" + method["key"] + "' for type '" + value[1] + "'")
+                        break
+                }
+                break
+            default:
+                console.warn("method '" + method["key"] + "' for type '" + value[1] + "'")
+                break
         }
     }
     function runMath(op, a, b) {
