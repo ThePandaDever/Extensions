@@ -1381,7 +1381,6 @@
     }
     
     function runArgument(content, ctx) {
-        console.log(content);
         if (content.length == 3) {
             switch (content[2]["type"]) {
                 case "FSLOBJECT":
