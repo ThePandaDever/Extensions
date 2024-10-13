@@ -1292,6 +1292,7 @@
         }
         return val;
     }
+    
     function getStr(value, ctx) {
         if (Array.isArray(value)) {
             switch (value[1]) {
@@ -1303,6 +1304,13 @@
         }
         return null;
     }
+    function getBool(value, ctx) {
+        if (value[1] == "null" || (value[0] == false && value[1] == "bool")) {
+            return false;
+        }
+        return true;
+    }
+    
     function deStr(str) {
         // Check if the string starts and ends with the same type of quotes
         if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
@@ -1423,6 +1431,16 @@
                         );
                         
                         break
+                    case "if":
+                        if (content["args"].length > 0) {
+                            let v = runArgument(content["args"][0], ctx);
+                            if (getBool(v)) {
+                                for (let cmd of content["content"]) {
+                                    runCommand(cmd, ctx);
+                                }
+                            }
+                        }
+                        break
                     default:
                         if (Object.keys(ctx.functions).includes(content.id)) {
                             let scope = {};
@@ -1523,7 +1541,7 @@
                                     value = runArgument(getKey(value, [{"type":"key","value":[method["key"],"string"]}], ctx), ctx)
                                     break
                                 case "method":
-                                    value = runMethod(value, method);
+                                    value = runMethod(value, method, ctx);
                                     break
                                 default:
                                     console.warn("unknown method type '" + method["id"] + "'")
@@ -1541,22 +1559,30 @@
             return content;
         }
     }
-    function runMethod(value, method) {
-        switch (value[0]) {
+    function runMethod(value, method, ctx) {
+        switch (value[1]) {
             case "string":
-                switch (method["key"]) {
-                    case "upper":
-                        if (method["data"].length != 0) { console.warn("method '" + method["key"] + "' doesnt take " + method["data"].length + " argument(s)"); break }
-                        break
-                    default:
-                        console.warn("method '" + method["key"] + "' for type '" + value[1] + "'")
-                        break
+                if (true) {
+                    switch (method["key"]) {
+                        case "upper":
+                            if (method["data"].length != 0) { console.warn("method '" + method["key"] + "' doesnt take " + method["data"].length + " argument(s)"); break }
+                            value[0] = value[0].toUpperCase();
+                            break
+                        case "lower":
+                            if (method["data"].length != 0) { console.warn("method '" + method["key"] + "' doesnt take " + method["data"].length + " argument(s)"); break }
+                            value[0] = value[0].toLowerCase();
+                            break
+                        default:
+                            console.warn("method '" + method["key"] + "' for type '" + value[1] + "'")
+                            break
+                    }
                 }
                 break
             default:
                 console.warn("method '" + method["key"] + "' for type '" + value[1] + "'")
                 break
         }
+        return value;
     }
     function runMath(op, a, b) {
         switch (op) {
@@ -1636,6 +1662,101 @@
         Scratch.vm.runtime.startHats('fsl_hatFileRequest');
     }
 
+    function convertArgument(arg, language) {
+        if (Array.isArray(arg)) {
+            if (arg.length == 2) {
+                switch (arg[1]) {
+                    case "string":
+                        if (language == "osl") {
+                            return "\"" + arg[0] + "\""
+                        } else if (language == "scratchblocks") {
+                            return "[" + arg[0] + "]"
+                        }
+                }
+            }
+        }
+    }
+
+    function convertCommand(cmd, language) {
+        let text = "";
+
+        switch (cmd["id"]) {
+            case "print":
+                if (language == "osl") {
+                    text += "log " + convertArgument(cmd.args[0], language);
+                } else if (language == "scratchblocks") {
+                    text += "say " + convertArgument(cmd.args[0], language);
+                }
+        }
+        
+        return text;
+    }
+
+    function convertSegment(segment, language) {
+        let text = "";
+        for (let cmd of segment) {
+            text += convertCommand(cmd, language) + "\n";
+        }
+        return text;
+    }
+
+    function convertFunction(func, funcname, language, typesafe) {
+        let text = "";
+
+        if (language == "osl") {
+            let args = "";
+            let prm_names = Object.keys(func.args);
+            let prm_types = Object.values(func.args);
+            for (let i = 0; i < prm_names.length; i++) {
+                if (i + 1 < prm_names.length) {
+                    args += "this." + prm_names[i] + ","
+                } else {
+                    args += "this." + prm_names[i]
+                }
+            }
+            text += "def \"" + funcname + "\"";
+            if (args !== "") {
+                text += " \"" + args + "\"";
+            }
+            text += " (\n";
+            if (typesafe === "true") {
+                let i = 0;
+                for (let arg of prm_names) {
+                    text += "if " + arg + ".isType(\"" + prm_types[i] + "\").not (; throw \"error\" \"argument '" + arg + "' is not '" + prm_types[i] + "'\"; )\n";
+                    i ++;
+                }
+            }
+        } else if (language == "scratchblocks") {
+            let args = "";
+            let prm_names = Object.keys(func.args);
+            let prm_types = Object.values(func.args);
+            for (let i = 0; i < prm_names.length; i++) {
+                args += "([" + prm_types[i] + " v] " + prm_names[i] + ")"
+            }
+            text += "define " + funcname + " " + args + "\n"
+        }
+        
+        text += convertSegment(func.content, language);
+        
+        if (language == "osl") {
+            text += ")\nmain";
+        } else if (language == "scratchblocks") {
+            text += "\n"
+        }
+        
+        return text;
+    }
+    
+    function convertAst(data, language, typesafe) {
+        let text = "";
+        
+        for (let func of Object.keys(data.functions)) {
+            text += convertFunction(data.functions[func], func, language, typesafe);
+        }
+        
+        return text;
+    }
+
     class FSL {
         getInfo() {
             return {
@@ -1677,6 +1798,17 @@
                         text: "Generate AST [fsl]",
                         arguments: {
                             fsl: { type: ArgumentType.STRING, defaultValue: 'fn main() { print("hello world") }' }
+                        }
+                    },
+                    {
+                        opcode: "convert",
+                        blockType: BlockType.REPORTER,
+                        text: "Convert [type] [data] to [language] [typesafe]",
+                        arguments: {
+                            type: { type: ArgumentType.STRING, defaultValue: 'text', menu: 'convertType' },
+                            data: { type: ArgumentType.STRING, defaultValue: 'fn main() { print("hello world") }' },
+                            language: { type: ArgumentType.STRING, defaultValue: 'osl', menu: 'convertLanguage' },
+                            typesafe: { type: ArgumentType.STRING, defaultValue: 'typesafe', menu: 'convertTypesafe' },
                         }
                     },
                     "---",
@@ -1862,6 +1994,34 @@
                             "json",
                             "object"
                         ]
+                    },
+                    convertType: {
+                        acceptReporters: true,
+                        items: [
+                            "text",
+                            "ast"
+                        ]
+                    },
+                    convertLanguage: {
+                        acceptReporters: true,
+                        items: [
+                            "osl",
+                            "js",
+                            "scratchblocks"
+                        ]
+                    },
+                    convertTypesafe: {
+                        acceptReporters: true,
+                        items: [
+                            {
+                              text: 'typesafe',
+                              value: true
+                            },
+                            {
+                              text: 'not typesafe',
+                              value: false
+                            }
+                        ]
                     }
                 }
             };
@@ -1889,6 +2049,22 @@
             let ast = generateAst(fsl);
             console.log("ast:", ast);
             return JSON.stringify(ast);
+        }
+
+        convert({ type, data, language, typesafe }) {
+            if (type == "ast") {
+                if (typeof(data) === 'string') {
+                    data = JSON.parse(data);
+                }
+            } else if (type == "text") {
+                data = generateAst(data);
+            }
+            if (typeof(data) !== 'object') {
+                return "";
+            }
+            let t = convertAst(data, language, typesafe);
+            console.log(t);
+            return t;
         }
 
         localUpdate({ data }) {
