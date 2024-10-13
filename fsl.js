@@ -877,7 +877,10 @@
         return ast;
     }
     function generateAstSegmentItem(content, raw) {
-        let ast = {};
+        let ast = generateAstArgument(raw, ["standalone"]);
+        if (Object.keys(ast).length > 0) {
+            return ast;
+        }
 
         if (content.length == 2) {
             if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
@@ -887,8 +890,6 @@
             if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
                 ast = generateAstStatement(content);
             }
-        } else {
-            ast = generateAstArgument(raw, ["standalone"]);
         }
 
         let assign = splitAssignment(raw);
@@ -1300,7 +1301,7 @@
                 case "object":
                     return JSON.stringify(value[0]);
             }
-            return value[0].toString();
+            return value[0] + "";
         }
         return null;
     }
@@ -1507,7 +1508,7 @@
                     } else {
                         if (!Object.keys(ctx.scope).includes(content["key"])) {
                             console.warn("unknown reference '" + content["key"] + "'");
-                            return [null,"null"]
+                            return [null,"null"];
                         } else {
                             let val = ctx.scope[content["key"]];
                             
