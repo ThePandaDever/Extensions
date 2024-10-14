@@ -877,9 +877,20 @@
         return ast;
     }
     function generateAstSegmentItem(content, raw) {
-        let ast = generateAstArgument(raw, ["standalone"]);
-        if (Object.keys(ast).length > 0) {
-            return ast;
+        let ast = {};
+
+        let assign = splitAssignment(raw);
+        if (assign.length == 2) {
+            ast = {
+                "type": "assignment",
+                "key": assign[0],
+                "value": generateAstArgument(assign[1])
+            }
+        } else {
+            ast = generateAstArgument(raw, ["standalone"]);
+            if (Object.keys(ast).length > 0) {
+                return ast;
+            }
         }
 
         if (content.length == 2) {
@@ -889,15 +900,6 @@
         } else if (content.length > 2) {
             if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
                 ast = generateAstStatement(content);
-            }
-        }
-
-        let assign = splitAssignment(raw);
-        if (assign.length == 2) {
-            ast = {
-                "type": "assignment",
-                "key": assign[0],
-                "value": generateAstArgument(assign[1])
             }
         }
 
@@ -1442,6 +1444,19 @@
                             }
                         }
                         break
+                    case "while":
+                        if (content["args"].length > 0) {
+                            let v = runArgument(content["args"][0], ctx);
+                            while (getBool(v)) {
+                                for (let cmd of content["content"]) {
+                                    runCommand(cmd, ctx);
+                                }
+                                v = runArgument(content["args"][0], ctx);
+                            }
+                        }
+                        break
+                    case "while":
+                        
                     default:
                         if (Object.keys(ctx.functions).includes(content.id)) {
                             let scope = {};
