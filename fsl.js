@@ -855,7 +855,6 @@
         if (currentSegment) {
             result.push(currentSegment.trim());
         }
-
         return result;
     }
 
@@ -878,7 +877,7 @@
     }
     function generateAstSegmentItem(content, raw) {
         let ast = {};
-
+        
         let assign = splitAssignment(raw);
         if (assign.length == 2) {
             ast = {
@@ -887,19 +886,19 @@
                 "value": generateAstArgument(assign[1])
             }
         } else {
+            if (content.length == 2) {
+                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+                    return generateAstCommand(content);
+                }
+            } else if (content.length > 2) {
+                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+                    return generateAstStatement(content);
+                }
+            }
+            
             ast = generateAstArgument(raw, ["standalone"]);
             if (Object.keys(ast).length > 0) {
                 return ast;
-            }
-        }
-
-        if (content.length == 2) {
-            if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
-                ast = generateAstCommand(content);
-            }
-        } else if (content.length > 2) {
-            if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
-                ast = generateAstStatement(content);
             }
         }
 
@@ -1151,6 +1150,18 @@
         if (isBrackets(item)) {
             return generateAstArgument(removeBraces(item))
         }
+
+        let command = splitCommand(item);
+        if (command.length == 2) {
+            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
+                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
+                return {
+                    "id": "function",
+                    "type": command[0],
+                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
+                }
+            }
+        }
         
         if (flags.includes("standalone")) {
             return {}
@@ -1314,13 +1325,25 @@
             }
             return value[0] + "";
         }
-        return null;
+        return "null";
     }
     function getBool(value, ctx) {
         if (value[1] == "null" || (value[0] == false && value[1] == "bool")) {
             return false;
         }
         return true;
+    }
+    function getNum(value, ctx) {
+        if (value[1] == "number") {
+            return value[0];
+        }
+        if (value[1] == "object") {
+            return Object.keys(value[0]).length;
+        }
+        if (value[1] == "array") {
+            return value[0].length;
+        }
+        return 0;
     }
     
     function deStr(str) {
@@ -1444,7 +1467,7 @@
                         
                         break
                     case "if":
-                        if (content["args"].length > 0) {
+                        if (content["args"].length == 1) {
                             let v = runArgument(content["args"][0], ctx);
                             if (getBool(v)) {
                                 for (let cmd of content["content"]) {
@@ -1454,7 +1477,7 @@
                         }
                         break
                     case "while":
-                        if (content["args"].length > 0) {
+                        if (content["args"].length == 1) {
                             let v = runArgument(content["args"][0], ctx);
                             while (getBool(v)) {
                                 for (let cmd of content["content"]) {
@@ -1465,7 +1488,15 @@
                         }
                         break
                     case "for":
-                        
+                        if (content["args"].length == 1) {
+                            let iter = getNum(runArgument(content["args"][0]))
+                            for (let i = 0; i < iter; i++) {
+                                for (let cmd of content["content"]) {
+                                    runCommand(cmd, ctx);
+                                }
+                            }
+                        }
+                        break
                     default:
                         if (Object.keys(ctx.functions).includes(content.id)) {
                             let scope = {};
@@ -1494,6 +1525,9 @@
         }
     }
     function runArgument(content, ctx) {
+        if (content == null) {
+            return [null,"null"]
+        }
         if (content.length == 3) {
             switch (content[2]["type"]) {
                 case "FSLOBJECT":
@@ -1579,6 +1613,13 @@
                     let var_val = runArgument(content["value"], ctx);
                     ctx.scope[content["key"]] = var_val;
                     return var_val
+                    break
+                case "function":
+                    switch (content["type"]) {
+                        case "input":
+                            return [prompt(getStr(content["data"][0])), "string"]
+                            break
+                    }
                     break
                 default:
                     console.warn("unknown arg type '" + content["id"] + "'")
