@@ -173,7 +173,7 @@
         let inBraces = 0;
         let inParens = 0;
 
-        const logicalOperatorsRegex = /\b(and|or|not)\b|(\|\||&&)/;
+        const logicalOperatorsRegex = /(\|\||&&)/;
         // Match logical operators
 
         for (let i = 0; i < input.length; i++) {
@@ -946,6 +946,15 @@
             flags = []
         }
 
+        let assign = splitAssignment(item);
+        if (assign.length == 2) {
+            return {
+                "id": "assignment",
+                "key": assign[0],
+                "value": generateAstArgument(assign[1])
+            }
+        }
+        
         // numbers
         if (isNumeric(item)) {
             return [Number(item), "number"]
@@ -1455,7 +1464,7 @@
                             }
                         }
                         break
-                    case "while":
+                    case "for":
                         
                     default:
                         if (Object.keys(ctx.functions).includes(content.id)) {
@@ -1566,6 +1575,11 @@
                         }
                         return value;
                     }
+                case "assignment":
+                    let var_val = runArgument(content["value"], ctx);
+                    ctx.scope[content["key"]] = var_val;
+                    return var_val
+                    break
                 default:
                     console.warn("unknown arg type '" + content["id"] + "'")
             }
