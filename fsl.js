@@ -1496,16 +1496,37 @@
                                 }
                             }
                         } else if (content["args"].length == 2) {
-                            let start = runArgument(content.args[0], ctx);
-                            let cond = runArgument(content.args[1], ctx);
+                            runArgument(content.args[0], ctx);
                             if (content.args[0].id != "assignment") {
                                 console.warn("first arg must be assignment");
+                                return;
+                            }
+                            let var_key = content.args[0].key;
+                            let cond = runArgument(content.args[1], ctx);
+                            while (getBool(cond)) {
+                                for (let cmd of content["content"]) {
+                                    runCommand(cmd, ctx);
+                                }
+                                ctx.scope[var_key][0] ++;
+                                cond = runArgument(content.args[1], ctx);
+                            }
+                        } else if (content["args"].length == 3) {
+                            let start = runArgument(content.args[0], ctx);
+                            if (content.args[0].id != "assignment") {
+                                console.warn("first arg must be assignment");
+                                return;
+                            }
+                            let cond = runArgument(content.args[1], ctx);
+                            let step = runArgument(content.args[2], ctx);
+                            if (step[1] != "number") {
+                                console.warn("step must be number");
+                                return;
                             }
                             while (getBool(cond)) {
                                 for (let cmd of content["content"]) {
                                     runCommand(cmd, ctx);
                                 }
-                                ctx.scope[content.args[0].key][0] += 1;
+                                ctx.scope[content.args[0].key][0] += step[0];
                                 cond = runArgument(content.args[1], ctx);
                             }
                         }
