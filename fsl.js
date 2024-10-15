@@ -9,7 +9,7 @@
 
     var api_requests = {};
     var api_data = {};
-    
+
     // imurmurhash-js
     function murmurhash3_32_gc(key, seed) {
         var remainder, bytes, h1, h1b, c1, c1b, c2, c2b, k1, i;
@@ -136,11 +136,11 @@
     Object.isSame = function (obj1,obj2) {
         if (typeof obj1 === "object" && typeof obj2 === "object") {
             if (obj1 === obj2) return true;
-    
+
             let obj1Keys = Object.keys(obj1);
             let obj2Keys = Object.keys(obj2);
             if (obj1Keys.length !== obj2Keys.length) return false;
-    
+
             for (let key of obj2Keys) {
               if (!obj1Keys.includes(key)) return false;
               const obj1Type = typeof obj1[key];
@@ -461,14 +461,14 @@
     function splitSegment(input) {
         let result = [];
         let current = "";
-        
+
         let inSingleQuotes = false;
         let inDoubleQuotes = false;
-        
+
         let bracketDepth = 0;
         let squareDepth = 0;
         let curlyDepth = 0;
-        
+
         for (let char of input) {
             if (char == '"' && !inSingleQuotes) {
                 inDoubleQuotes = !inDoubleQuotes;
@@ -495,7 +495,7 @@
                             }
                         }
                         break;
-                        
+
                     case "[":
                         squareDepth ++;
                         current += char;
@@ -504,7 +504,7 @@
                         squareDepth --;
                         current += char;
                         break;
-                        
+
                     case "(":
                         bracketDepth ++;
                         current += char;
@@ -513,7 +513,7 @@
                         bracketDepth --;
                         current += char;
                         break;
-                    
+
                     case ";":
                         if (bracketDepth == 0 && curlyDepth == 0 && squareDepth == 0) {
                             if (current) {
@@ -524,7 +524,7 @@
                             current += char;
                         }
                         break
-                    
+
                     default:
                         current += char;
                 }
@@ -532,11 +532,11 @@
                 current += char;
             }
         }
-        
+
         if (current) {
             result.push(current.trim());
         }
-        
+
         return result;
     }
     function splitAssignment(str) {
@@ -710,11 +710,11 @@
                 cdepth--;
             }
         }
-        
+
         if (currentPart != "") {
             result.push(currentPart.trim())
         }
-        
+
         return result;
     }
     function splitReferences(str) {
@@ -728,7 +728,7 @@
 
         for (let i = 0; i < str.length; i++) {
             const char = str[i];
-            
+
             if (isInQuotes) {
                 buffer += char;
                 if (char === quoteChar) {
@@ -742,31 +742,31 @@
                 buffer += char;
                 continue;
             }
-            
+
             if (char === '(') parensDepth++;
             if (char === '{') curlyDepth++;
             if (char === '[') squareDepth++;
-            
+
             if (char === ')') parensDepth--;
             if (char === '}') curlyDepth--;
             if (char === ']') squareDepth--;
-            
+
             // Handle brackets opening
             if (char === '[' && squareDepth == 1) {
-                
+
                 if (parensDepth === 0 && curlyDepth === 0) {
                     if (buffer != "") {
                         result.push(buffer);
                         buffer = '';
                     }
                 }
-                
+
                 // Start a new bracketed section
                 buffer += char;
 
                 continue;
             }
-            
+
             // Handle brackets closing
             if (char === ']' && squareDepth == 0) {
 
@@ -781,7 +781,7 @@
                 }
                 continue;
             }
-            
+
             buffer += char;
         }
 
@@ -877,7 +877,7 @@
     }
     function generateAstSegmentItem(content, raw) {
         let ast = {};
-        
+
         let assign = splitAssignment(raw);
         if (assign.length == 2) {
             ast = {
@@ -895,7 +895,7 @@
                     return generateAstStatement(content);
                 }
             }
-            
+
             ast = generateAstArgument(raw, ["standalone"]);
             if (Object.keys(ast).length > 0) {
                 return ast;
@@ -953,7 +953,7 @@
                 "value": generateAstArgument(assign[1])
             }
         }
-        
+
         // numbers
         if (isNumeric(item)) {
             return [Number(item), "number"]
@@ -1047,18 +1047,18 @@
             }
             for (let methodi = 1; methodi < methods.length; methodi++) {
                 let cmd = splitCommand(methods[methodi])
-                
+
                 let isKey = cmd.length == 1 &&
                     (!isBrackets(cmd[0]) && !isCurlyBrackets(cmd[0]) && !isSquareBrackets(cmd[0]));
                 let isMethod = cmd.length == 2 &&
                     (!isBrackets(cmd[0]) && !isCurlyBrackets(cmd[0]) && !isSquareBrackets(cmd[0])) &&
                     (isBrackets(cmd[1]) && !isCurlyBrackets(cmd[1]) && !isSquareBrackets(cmd[1]));
-                
+
                 let type = "unknown";
-                
+
                 if (isKey) { type = "key"; }
                 if (isMethod) { type = "method"; }
-                
+
                 switch (type) {
                     case "key":
                         ast["list"].push({
@@ -1146,7 +1146,7 @@
             }
             return arr;
         }
-        
+
         if (isBrackets(item)) {
             return generateAstArgument(removeBraces(item))
         }
@@ -1162,7 +1162,7 @@
                 }
             }
         }
-        
+
         if (flags.includes("standalone")) {
             return {}
         }
@@ -1286,12 +1286,12 @@
                                 case "number":
                                     if (Object.keys(val[0]).includes((key["value"][0]-1).toString())) {
                                         let v = val[0][key["value"][0]-1];
-                                        
+
                                         // "string"[index]
                                         if (val[1] == "string") {
                                             v = [v,"string"]
                                         }
-                                        
+
                                         val = runArgument(v, ctx)
                                     } else {
                                         return [null,"null"]
@@ -1315,7 +1315,7 @@
         }
         return val;
     }
-    
+
     function getStr(value, ctx) {
         if (Array.isArray(value)) {
             switch (value[1]) {
@@ -1345,7 +1345,7 @@
         }
         return 0;
     }
-    
+
     function deStr(str) {
         // Check if the string starts and ends with the same type of quotes
         if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
@@ -1354,25 +1354,25 @@
         }
         return str; // Return the original string if no surrounding quotes are found
     }
-    
+
     function loadModulesIntoScope(scope, ast) {
         let flipped_externals_ref = Object.flip(ast.externals_ref);
-        
+
         for (let external of Object.keys(flipped_externals_ref)) {
             let ext_ast = ast.externals[external];
             let ext = {}
-            
+
             for (let func of Object.keys(ext_ast.functions)) {
                 let ext_fn = ext_ast.functions[func]
                 ext[func] = [
                     ext_fn
                 ,"function"]
             }
-            
+
             let flipped_moduless_ref = Object.flip(ext_ast.externals_ref);
-            
+
             ext = loadModulesIntoScope(ext, ext_ast)
-            
+
             scope[flipped_externals_ref[external]] = [ext, "module"]
         }
         return scope
@@ -1392,17 +1392,17 @@
         let fn = functions[func];
 
         scope["fsl"] = [{
-            
+
         },"object",{"type":"FSLOBJECT"}]
 
         scope = loadModulesIntoScope(scope, ast);
-        
+
         let ctx = {
             "functions": functions,
             "ast": ast,
             "scope": scope
         };
-        
+
         for (let content of fn["content"]) {
             runCommand(content, ctx);
         }
@@ -1429,42 +1429,42 @@
                         break
                     case "api_call":
                         if (content.args.length != 3) {return}
-                        
+
                         let api = runArgument(content.args[0]);
                         let api_cmd = runArgument(content.args[1]);
                         let api_data = runArgument(content.args[2]);
-                        
+
                         if (api[1] != "string") { return }
                         if (api_cmd[1] != "string") { return }
                         if (api_data[1] != "object") { return }
-                        
+
                         api_call(
                             api[0],
                             api_cmd[0],
                             api_data[0]
                         );
-                        
+
                         break
                     case "file_call":
                         if (content.args.length != 4) {return}
-                        
+
                         let file_cmd = runArgument(content.args[0]);
                         let file_path = runArgument(content.args[1]);
                         let file_data = runArgument(content.args[2]);
                         let file_path2 = runArgument(content.args[3]);
-                        
+
                         if (file_cmd[1] != "string") { return }
                         if (file_path[1] != "string") { return }
                         if (file_data[1] != "object") { return }
                         if (file_path2[1] != "string") { return }
-                        
+
                         file_call(
                             file_cmd[0],
                             file_path[0],
                             file_data[0],
                             file_path2[0]
                         );
-                        
+
                         break
                     case "if":
                         if (content["args"].length == 1) {
@@ -1494,6 +1494,19 @@
                                 for (let cmd of content["content"]) {
                                     runCommand(cmd, ctx);
                                 }
+                            }
+                        } else if (content["args"].length == 2) {
+                            let start = runArgument(content.args[0], ctx);
+                            let cond = runArgument(content.args[1], ctx);
+                            if (content.args[0].id != "assignment") {
+                                console.warn("first arg must be assignment");
+                            }
+                            while (getBool(cond)) {
+                                for (let cmd of content["content"]) {
+                                    runCommand(cmd, ctx);
+                                }
+                                ctx.scope[content.args[0].key][0] += 1;
+                                cond = runArgument(content.args[1], ctx);
                             }
                         }
                         break
@@ -1569,7 +1582,7 @@
                             return [null,"null"];
                         } else {
                             let val = ctx.scope[content["key"]];
-                            
+
                             return runArgument(val,ctx);
                         }
                     }
@@ -1593,7 +1606,7 @@
                 case "methods":
                     if (true) {
                         let value = runArgument(content["value"], ctx)
-                        
+
                         for (let method of content["list"]) {
                             switch (method["id"]) {
                                 case "get_key":
@@ -1759,7 +1772,7 @@
                     text += "say " + convertArgument(cmd.args[0], language);
                 }
         }
-        
+
         return text;
     }
 
@@ -1806,25 +1819,25 @@
             }
             text += "define " + funcname + " " + args + "\n"
         }
-        
+
         text += convertSegment(func.content, language);
-        
+
         if (language == "osl") {
             text += ")\nmain";
         } else if (language == "scratchblocks") {
             text += "\n"
         }
-        
+
         return text;
     }
-    
+
     function convertAst(data, language, typesafe) {
         let text = "";
-        
+
         for (let func of Object.keys(data.functions)) {
             text += convertFunction(data.functions[func], func, language, typesafe);
         }
-        
+
         return text;
     }
 
@@ -2115,7 +2128,7 @@
             }
             return runFunction(ast, func, scope);
         }
-        
+
         generateAst({ fsl }) {
             let ast = generateAst(fsl);
             console.log("ast:", ast);
@@ -2142,7 +2155,7 @@
             if (typeof(data) === 'string') {
                 data = JSON.parse(data);
             }
-            
+
             local_system = data;
         }
 
@@ -2185,14 +2198,14 @@
         }
         fileUpdate({ sys }) {
             if (typeof(sys) !== 'object' && (typeof(sys) !== 'string')) {return}
-            
+
             if (typeof(sys) === 'string') {
                 sys = JSON.parse(sys);
             }
-            
+
             file_system = sys;
         }
-        
+
         apiRequestCreate({ api, command, data }) {
             api_call(api, command, data);
         }
@@ -2235,11 +2248,11 @@
         }
         apiUpdate({ data, api }) {
             if (typeof(data) !== 'object' && (typeof(data) !== 'string')) {return}
-            
+
             if (typeof(data) === 'string') {
                 data = JSON.parse(data);
             }
-            
+
             api_data[api] = data;
         }
     }
