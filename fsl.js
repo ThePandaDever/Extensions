@@ -1812,13 +1812,16 @@
 
         if (language == "osl") {
             let args = "";
-            let prm_names = Object.keys(func.args);
-            let prm_types = Object.values(func.args);
-            for (let i = 0; i < prm_names.length; i++) {
-                if (i + 1 < prm_names.length) {
-                    args += "this." + prm_names[i] + ","
-                } else {
-                    args += "this." + prm_names[i]
+            let prm_names = {}, prm_types = {}
+            if (func.args) {
+                prm_names = Object.keys(func.args);
+                prm_types = Object.values(func.args);
+                for (let i = 0; i < prm_names.length; i++) {
+                    if (i + 1 < prm_names.length) {
+                        args += "this." + prm_names[i] + ","
+                    } else {
+                        args += "this." + prm_names[i]
+                    }
                 }
             }
             text += "def \"" + funcname + "\"";
@@ -1826,7 +1829,7 @@
                 text += " \"" + args + "\"";
             }
             text += " (\n";
-            if (typesafe === "true") {
+            if (typesafe === "true" && args !== "") {
                 let i = 0;
                 for (let arg of prm_names) {
                     text += "if " + arg + ".isType(\"" + prm_types[i] + "\").not (; throw \"error\" \"argument '" + arg + "' is not '" + prm_types[i] + "'\"; )\n";
@@ -1835,10 +1838,12 @@
             }
         } else if (language == "scratchblocks") {
             let args = "";
-            let prm_names = Object.keys(func.args);
-            let prm_types = Object.values(func.args);
-            for (let i = 0; i < prm_names.length; i++) {
-                args += "([" + prm_types[i] + " v] " + prm_names[i] + ")"
+            if (func.args) {
+                let prm_names = Object.keys(func.args);
+                let prm_types = Object.values(func.args);
+                for (let i = 0; i < prm_names.length; i++) {
+                    args += "([" + prm_types[i] + " v] " + prm_names[i] + ")"
+                }
             }
             text += "define " + funcname + " " + args + "\n"
         }
