@@ -1037,6 +1037,18 @@
             ast["data"] = data;
             return ast;
         }
+        
+        let command = splitCommand(item);
+        if (command.length == 2) {
+            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
+                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
+                return {
+                    "id": "function",
+                    "key": generateAstArgument(command[0],["func"]),
+                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
+                }
+            }
+        }
 
         let methods = splitCharedCommand(item,".");
         if (methods.length > 1) {
@@ -1151,18 +1163,9 @@
             return generateAstArgument(removeBraces(item))
         }
 
-        let command = splitCommand(item);
-        if (command.length == 2) {
-            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
-                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
-                return {
-                    "id": "function",
-                    "type": command[0],
-                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
-                }
-            }
+        if (flags.includes("func")) {
+            return item;
         }
-
         if (flags.includes("standalone")) {
             return {}
         }
@@ -1253,7 +1256,7 @@
     }
     function getKey(val,keys,ctx) {
         switch (val[1]) {
-            case "object":
+            case "object": case "module":
                 for (let key of keys) {
                     key["value"] = runArgument(key["value"], ctx);
                     switch (key["type"]) {
@@ -1366,7 +1369,7 @@
                 let ext_fn = ext_ast.functions[func]
                 ext[func] = [
                     ext_fn
-                ,"function"]
+                ,"function",{"flags":["EXTERNAL"]}]
             }
 
             let flipped_moduless_ref = Object.flip(ext_ast.externals_ref);
@@ -1396,6 +1399,12 @@
         },"object",{"type":"FSLOBJECT"}]
 
         scope = loadModulesIntoScope(scope, ast);
+
+        for (let fn of Object.keys(functions)) {
+            scope[fn] = [
+                functions[fn]
+            ,"function",{"flags":["LOCAL"]}]
+        }
 
         let ctx = {
             "functions": functions,
@@ -1534,20 +1543,10 @@
                         }
                         break
                     default:
-                        if (Object.keys(ctx.functions).includes(content.id)) {
-                            let scope = {};
-                            if (content.args.length > 0) {
-                                let fn = ctx.functions[content.id];
-                                for (let i = 0; i < fn["arg_map"].length; i++) {
-                                    let k = fn["arg_map"][i];
-                                    let v = runArgument(content.args[i], ctx)
-                                    scope[k] = v;
-                                }
-                            }
-                            runFunction(ctx.ast, content.id, scope)
-                        } else {
-                            console.warn("unknown function '" + content.id + "'");
-                        }
+                        let call = content;
+                        call["key"] = content["id"];
+                        call["id"] = "function";
+                        return runFunctionCall(call, ctx);
                         break
                 }
                 break
@@ -1655,6 +1654,8 @@
                         case "input":
                             return [prompt(getStr(content["data"][0])), "string"]
                             break
+                        default:
+                            return runFunctionCall(content, ctx);
                     }
                     break
                 default:
@@ -1665,6 +1666,24 @@
         if (Array.isArray(content)) {
             return content;
         }
+    }
+    function runFunctionCall(content, ctx) {
+        //console.log(content,ctx);
+        let key = content["key"]
+        if (typeof(key) == "string") { key = [key, "string"] }
+        key = runArgument(key,ctx);
+        
+        if (Object.keys(key).length == 3) {
+            if (key[3].flags.includes("EXTERNAL")) {
+                
+            } else {
+                runFunction(ctx.ast, key, {})
+            }
+        } else { return [null,"null"] }
+        
+        console.log(key);
+        //runFunction(ctx.ast, key, {})
+        return ["",""]
     }
     function runMethod(value, method, ctx) {
         switch (value[1]) {
