@@ -583,6 +583,18 @@
         // If no '=' is found, return the original string and an empty string
         return [];
     }
+    function splitByFirstSpace(str) {
+        const firstSpaceIndex = str.indexOf(' ');
+    
+        if (firstSpaceIndex === -1) {
+            return [str];
+        }
+    
+        const firstPart = str.slice(0, firstSpaceIndex);
+        const secondPart = str.slice(firstSpaceIndex + 1);
+    
+        return [firstPart, secondPart];
+    }
     function splitCharedCommand(str, chr) {
         const result = [];
         let buffer = '';
@@ -1218,6 +1230,7 @@
                         content = splitSegment(removeCurlyBraces(def[1]));
                     }
                     let ast_fn = generateAstFunction(content);
+                    ast_fn["key"] = defspaced[1]
 
                     if (defcmd.length == 2) {
                         if (isBrackets(defcmd[1])) {
@@ -1388,15 +1401,15 @@
 
         let functions = ast["functions"];
 
+        console.log(func, functions);
         if (!(func in functions)) {
+            console.warn("couldnt find function" + func);
             return;
         }
 
         let fn = functions[func];
 
-        scope["fsl"] = [{
-
-        },"object",{"type":"FSLOBJECT"}]
+        scope["fsl"] = [{},"object",{"type":"FSLOBJECT"}]
 
         scope = loadModulesIntoScope(scope, ast);
 
@@ -1412,9 +1425,17 @@
             "scope": scope
         };
 
+        console.group("func run")        
         for (let content of fn["content"]) {
+            console.group(content["type"] + ": " + content["id"]);
+            console.log(content["type"]);
+            if (content["type"]) {}
             runCommand(content, ctx);
+            console.groupEnd();
         }
+        console.groupEnd();
+        
+        return [null,"null"];
     }
     function runCommand(content, ctx) {
         switch (content.type) {
@@ -1498,6 +1519,7 @@
                         break
                     case "for":
                         if (content["args"].length == 1) {
+                            // for (amt)
                             let iter = getNum(runArgument(content["args"][0]))
                             for (let i = 0; i < iter; i++) {
                                 for (let cmd of content["content"]) {
@@ -1505,6 +1527,7 @@
                                 }
                             }
                         } else if (content["args"].length == 2) {
+                            // for (i = 0, i < 10)
                             runArgument(content.args[0], ctx);
                             if (content.args[0].id != "assignment") {
                                 console.warn("first arg must be assignment");
@@ -1512,7 +1535,7 @@
                             }
                             let var_key = content.args[0].key;
                             let cond = runArgument(content.args[1], ctx);
-                            while (getBool(cond) && ctx.scope[var_key][0] < 10) {
+                            while (getBool(cond)) {
                                 for (let cmd of content["content"]) {
                                     runCommand(cmd, ctx);
                                 }
@@ -1520,6 +1543,7 @@
                                 cond = runArgument(content.args[1], ctx);
                             }
                         } else if (content["args"].length == 3) {
+                            // for (i = 0, i < 10, 1)
                             runArgument(content.args[0], ctx);
                             if (content.args[0].id != "assignment") {
                                 console.warn("first arg must be assignment");
@@ -1662,7 +1686,6 @@
                     console.warn("unknown arg type '" + content["id"] + "'")
             }
         }
-
         if (Array.isArray(content)) {
             return content;
         }
@@ -1670,20 +1693,19 @@
     function runFunctionCall(content, ctx) {
         //console.log(content,ctx);
         let key = content["key"]
-        if (typeof(key) == "string") { key = [key, "string"] }
+        if (typeof(key) == "string") { key = {"id": "reference", "key": key} }
         key = runArgument(key,ctx);
         
         if (Object.keys(key).length == 3) {
-            if (key[3].flags.includes("EXTERNAL")) {
+            if (key[2].flags.includes("EXTERNAL")) {
                 
             } else {
-                runFunction(ctx.ast, key, {})
+                let data = runFunction(ctx.ast, key[0]["key"], {});
             }
         } else { return [null,"null"] }
         
-        console.log(key);
         //runFunction(ctx.ast, key, {})
-        return ["",""]
+        return [null,"null"]
     }
     function runMethod(value, method, ctx) {
         switch (value[1]) {
@@ -2163,7 +2185,7 @@
             if (typeof(fsl) !== 'object') {
                 ast = getAst(fsl);
             }
-            return runFunction(ast, func);
+            return JSON.stringify(runFunction(ast, func));
         }
         fslRunScope({ fsl, func, scope }) {
             let ast = {};
@@ -2173,7 +2195,7 @@
             if (typeof(scope) !== 'object') {
                 scope = JSON.parse(scope);
             }
-            return runFunction(ast, func, scope);
+            return JSON.stringify(runFunction(ast, func, scope));
         }
 
         generateAst({ fsl }) {
