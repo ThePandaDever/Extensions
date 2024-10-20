@@ -1557,20 +1557,19 @@
                             }
                             while (getBool(cond)) {
                                 for (let cmd of content["content"]) {
-                                    console.log(cmd);
                                     runCommand(cmd, ctx);
                                 }
                                 ctx.scope[content.args[0].key][0] += step[0];
                                 cond = runArgument(content.args[1], ctx);
+                                console.log("inc", content.args[0].key, step[0], "now", ctx.scope[content.args[0].key][0])
                             }
                         }
                         break
                     default:
-                        let call = content;
-                        console.log(content);
-                        call["key"] = content["id"];
-                        call["id"] = "function";
-                        return runFunctionCall(call, content.args, ctx);
+                        let call = {
+                            "key": content.id
+                        };
+                        runFunctionCall(call, content.args, ctx);
                         break
                 }
                 break
@@ -1628,7 +1627,6 @@
                             return [null,"null"];
                         } else {
                             let val = ctx.scope[content.key];
-
                             return runArgument(val,ctx);
                         }
                     }
@@ -1641,11 +1639,13 @@
                     }
                     return [obj, "object"];
                 case "array":
-                    let arr = [];
+                    var arr = [];
                     let items = content.values;
                     for (let i = 0; i < items.length; i++) {
-                        arr.push(runArgument(items[i], ctx));
+                        let v = runArgument(items[i], ctx);
+                        arr.push(v);
                     }
+                    //console.log(arr,items,ctx)
                     return [arr, "array"];
                 case "key_get":
                     return getKey(runArgument(content.value, ctx), content.keys, ctx);
@@ -1670,6 +1670,7 @@
                     }
                 case "assignment":
                     let var_val = runArgument(content.value, ctx);
+                    console.log("assignment: ", content.key, ":", var_val)
                     ctx.scope[content.key] = var_val;
                     return var_val
                     break
@@ -1694,7 +1695,6 @@
         //console.log(content,ctx);
         let key = content["key"]
         if (typeof(key) == "string") { key = {"id": "reference", "key": key} }
-        console.log(content);
         key = runArgument(key,ctx);
         if (key[1] != "function") { return [null, "null"] }
         
