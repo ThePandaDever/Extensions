@@ -383,7 +383,7 @@
         // Track if we are inside quotes
         let quoteType = '';
         // Track the type of quote (either ' or ")
-
+        
         while (i < input.length) {
             const char = input[i];
 
@@ -1403,7 +1403,7 @@
 
         console.log(func, functions);
         if (!(func in functions)) {
-            console.warn("couldnt find function" + func);
+            console.warn("couldnt find function " + func);
             return;
         }
 
