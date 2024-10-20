@@ -1050,18 +1050,6 @@
             return ast;
         }
         
-        let command = splitCommand(item);
-        if (command.length == 2) {
-            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
-                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
-                return {
-                    "id": "function",
-                    "key": generateAstArgument(command[0],["func"]),
-                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
-                }
-            }
-        }
-
         let methods = splitCharedCommand(item,".");
         if (methods.length > 1) {
             let ast = {
@@ -1069,9 +1057,9 @@
                 "value": generateAstArgument(methods[0]),
                 "list": []
             }
+            
             for (let methodi = 1; methodi < methods.length; methodi++) {
                 let cmd = splitCommand(methods[methodi])
-
                 let isKey = cmd.length == 1 &&
                     (!isBrackets(cmd[0]) && !isCurlyBrackets(cmd[0]) && !isSquareBrackets(cmd[0]));
                 let isMethod = cmd.length == 2 &&
@@ -1104,6 +1092,18 @@
                 }
             }
             return ast;
+        }
+        
+        let command = splitCommand(item);
+        if (command.length == 2) {
+            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
+                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
+                return {
+                    "id": "function",
+                    "key": generateAstArgument(command[0],["func"]),
+                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
+                }
+            }
         }
 
         // constants
@@ -1460,9 +1460,9 @@
                     case "api_call":
                         if (content.args.length != 3) {return}
 
-                        let api = runArgument(content.args[0]);
-                        let api_cmd = runArgument(content.args[1]);
-                        let api_data = runArgument(content.args[2]);
+                        let api = runArgument(content.args[0], ctx);
+                        let api_cmd = runArgument(content.args[1], ctx);
+                        let api_data = runArgument(content.args[2], ctx);
 
                         if (api[1] != "string") { return }
                         if (api_cmd[1] != "string") { return }
@@ -1570,7 +1570,7 @@
                         let call = content;
                         call["key"] = content["id"];
                         call["id"] = "function";
-                        return runFunctionCall(call, ctx);
+                        return runFunctionCall(call, content.args, ctx);
                         break
                 }
                 break
@@ -1623,38 +1623,38 @@
                         console.warn("ctx missing scope key.");
                         return;
                     } else {
-                        if (!Object.keys(ctx.scope).includes(content["key"])) {
-                            console.warn("unknown reference '" + content["key"] + "'");
+                        if (!Object.keys(ctx.scope).includes(content.key)) {
+                            console.warn("unknown reference '" + content.key + "'");
                             return [null,"null"];
                         } else {
-                            let val = ctx.scope[content["key"]];
+                            let val = ctx.scope[content.key];
 
                             return runArgument(val,ctx);
                         }
                     }
                 case "object":
                     let obj = {};
-                    let keys = content["keys"];
-                    let values = content["values"];
+                    let keys = content.keys;
+                    let values = content.values;
                     for (let i = 0; i < keys.length; i++) {
                         obj[keys[i]] = runArgument(values[i], ctx);
                     }
                     return [obj, "object"];
                 case "array":
                     let arr = [];
-                    let items = content["values"];
+                    let items = content.values;
                     for (let i = 0; i < items.length; i++) {
                         arr.push(runArgument(items[i], ctx));
                     }
                     return [arr, "array"];
                 case "key_get":
-                    return getKey(runArgument(content["value"], ctx), content["keys"], ctx);
+                    return getKey(runArgument(content.value, ctx), content.keys, ctx);
                 case "methods":
                     if (true) {
-                        let value = runArgument(content["value"], ctx)
+                        let value = runArgument(content.value, ctx)
 
-                        for (let method of content["list"]) {
-                            switch (method["id"]) {
+                        for (let method of content.list) {
+                            switch (method.id) {
                                 case "get_key":
                                     value = runArgument(getKey(value, [{"type":"key","value":[method["key"],"string"]}], ctx), ctx)
                                     break
@@ -1669,38 +1669,46 @@
                         return value;
                     }
                 case "assignment":
-                    let var_val = runArgument(content["value"], ctx);
-                    ctx.scope[content["key"]] = var_val;
+                    let var_val = runArgument(content.value, ctx);
+                    ctx.scope[content.key] = var_val;
                     return var_val
                     break
                 case "function":
-                    switch (content["type"]) {
+                    switch (content.type) {
                         case "input":
-                            return [prompt(getStr(content["data"][0])), "string"]
+                            return [prompt(getStr(content.data[0])), "string"]
                             break
                         default:
-                            return runFunctionCall(content, ctx);
+                            return runFunctionCall(content, content.args, ctx);
                     }
                     break
                 default:
-                    console.warn("unknown arg type '" + content["id"] + "'")
+                    console.warn("unknown arg type '" + content.id + "'")
             }
         }
         if (Array.isArray(content)) {
             return content;
         }
     }
-    function runFunctionCall(content, ctx) {
+    function runFunctionCall(content, args,  ctx) {
         //console.log(content,ctx);
         let key = content["key"]
         if (typeof(key) == "string") { key = {"id": "reference", "key": key} }
         key = runArgument(key,ctx);
+        if (key[1] != "function") { return [null, "null"] }
+        
+        let scope = {};
+        
+        let map = key[0]["arg_map"];
+        for (let i = 0; i < args.length; i++) {
+            scope[map[i]] = runArgument(args[i], ctx);
+        }
         
         if (Object.keys(key).length == 3) {
             if (key[2].flags.includes("EXTERNAL")) {
                 
             } else {
-                let data = runFunction(ctx.ast, key[0]["key"], {});
+                let data = runFunction(ctx.ast, key[0]["key"], scope);
             }
         } else { return [null,"null"] }
         
