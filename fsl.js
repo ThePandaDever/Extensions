@@ -1400,8 +1400,7 @@
         }
 
         let functions = ast["functions"];
-
-        console.log(func, functions);
+        
         if (!(func in functions)) {
             console.warn("couldnt find function " + func);
             return;
@@ -1425,15 +1424,15 @@
             "scope": scope
         };
 
-        console.group("func run")        
+        //console.group("func run")        
         for (let content of fn["content"]) {
-            console.group(content["type"] + ": " + content["id"]);
-            console.log(content["type"]);
-            if (content["type"]) {}
+            //console.group(content["type"] + ": " + content["id"]);
+            //console.log(content["type"]);
+            //if (content["type"]) {}
             runCommand(content, ctx);
-            console.groupEnd();
+            //console.groupEnd();
         }
-        console.groupEnd();
+        //console.groupEnd();
         
         return [null,"null"];
     }
@@ -1556,18 +1555,19 @@
                                 console.warn("step must be number");
                                 return;
                             }
-                            while (getBool(cond) && ctx.scope[var_key][0] < 10) {
+                            while (getBool(cond)) {
                                 for (let cmd of content["content"]) {
+                                    console.log(cmd);
                                     runCommand(cmd, ctx);
                                 }
                                 ctx.scope[content.args[0].key][0] += step[0];
-                                console.log(ctx.scope);
                                 cond = runArgument(content.args[1], ctx);
                             }
                         }
                         break
                     default:
                         let call = content;
+                        console.log(content);
                         call["key"] = content["id"];
                         call["id"] = "function";
                         return runFunctionCall(call, content.args, ctx);
@@ -1694,6 +1694,7 @@
         //console.log(content,ctx);
         let key = content["key"]
         if (typeof(key) == "string") { key = {"id": "reference", "key": key} }
+        console.log(content);
         key = runArgument(key,ctx);
         if (key[1] != "function") { return [null, "null"] }
         
