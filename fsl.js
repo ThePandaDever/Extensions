@@ -913,6 +913,16 @@
                 return ast;
             }
         }
+        let first = splitByFirstSpace(raw);
+        if (first.length > 1) {
+            switch (first[0]) {
+                case "return":
+                    return {
+                        "type":"return",
+                        "value":generateAstArgument(first[1])
+                    }
+            }
+        }
 
         if (Object.keys(ast).length == 0) {
             if (raw != "") {
@@ -1424,20 +1434,29 @@
             "scope": scope
         };
 
-        //console.group("func run")        
-        for (let content of fn["content"]) {
-            //console.group(content["type"] + ": " + content["id"]);
-            //console.log(content["type"]);
-            //if (content["type"]) {}
-            runCommand(content, ctx);
-            //console.groupEnd();
+        //console.group("func run")
+        let out = runSegment(fn["content"], ctx);
+        if (out === null) {
+            return [null, "null"];
         }
+        return out;
         //console.groupEnd();
         
-        return [null,"null"];
+    }
+    function runSegment(content, ctx) {
+        for (let i = 0; i < content.length; i++) {
+            let cmd = content[i];
+            runCommand(cmd, ctx)
+        }
+        return null;
     }
     function runCommand(content, ctx) {
         switch (content.type) {
+            case "return":
+                return {
+                    "cmd": "return",
+                    "value": runArgument(cmd.value, ctx)
+                };
             case "command":
                 switch (content.id) {
                     case "print":
@@ -1680,7 +1699,7 @@
                             return [prompt(getStr(content.data[0])), "string"]
                             break
                         default:
-                            return runFunctionCall(content, content.args, ctx);
+                            return runFunctionCall(content, content.data, ctx);
                     }
                     break
                 default:
@@ -1699,22 +1718,25 @@
         if (key[1] != "function") { return [null, "null"] }
         
         let scope = {};
-        
-        let map = key[0]["arg_map"];
-        for (let i = 0; i < args.length; i++) {
-            scope[map[i]] = runArgument(args[i], ctx);
+
+        if (args) {
+            let map = key[0]["arg_map"];
+            for (let i = 0; i < args.length; i++) {
+                scope[map[i]] = runArgument(args[i], ctx);
+            }
         }
-        
+
+        let data = [null, "null"]
         if (Object.keys(key).length == 3) {
             if (key[2].flags.includes("EXTERNAL")) {
                 
             } else {
-                let data = runFunction(ctx.ast, key[0]["key"], scope);
+                data = runFunction(ctx.ast, key[0]["key"], scope);
             }
         } else { return [null,"null"] }
         
         //runFunction(ctx.ast, key, {})
-        return [null,"null"]
+        return data;
     }
     function runMethod(value, method, ctx) {
         switch (value[1]) {
