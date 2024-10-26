@@ -888,31 +888,8 @@
         return ast;
     }
     function generateAstSegmentItem(content, raw) {
-        let ast = {};
-
-        let assign = splitAssignment(raw);
-        if (assign.length == 2) {
-            ast = {
-                "type": "assignment",
-                "key": assign[0],
-                "value": generateAstArgument(assign[1])
-            }
-        } else {
-            if (content.length == 2) {
-                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
-                    return generateAstCommand(content);
-                }
-            } else if (content.length > 2) {
-                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
-                    return generateAstStatement(content);
-                }
-            }
-
-            ast = generateAstArgument(raw, ["standalone"]);
-            if (Object.keys(ast).length > 0) {
-                return ast;
-            }
-        }
+        let ast = {}
+        
         let first = splitByFirstSpace(raw);
         if (first.length > 1) {
             switch (first[0]) {
@@ -923,22 +900,52 @@
                     }
             }
         }
-
-        if (Object.keys(ast).length == 0) {
-            if (raw != "") {
-                console.warn("unexpected tokens '", raw, "'");
-                ast = {};
+            
+        let assign = splitAssignment(raw);
+        if (assign.length == 2) {
+            ast = {
+                "type": "assignment",
+                "key": assign[0],
+                "value": generateAstArgument(assign[1])
+            }
+        } else {
+            if (content.length == 2) {
+                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+                    ast = generateAstCommand(content);
+                    if (Object.keys(ast).length > 0) {
+                        return ast;
+                    }
+                }
+            } else if (content.length > 2) {
+                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+                    ast = generateAstStatement(content);
+                    if (Object.keys(ast).length > 0) {
+                        return ast;
+                    }
+                }
             }
         }
+        
+        ast = generateAstArgument(raw, ["standalone"]);
+        if (Object.keys(ast).length > 0) {
+            let oast = ast;
+            ast = {}
+            ast["data"] = oast;
+            ast["type"] = "standalone";
+            return ast;
+        }
+        
         return ast;
     }
     function generateAstCommand(item) {
         let ast = {};
 
-        ast["type"] = "command";
-        ast["id"] = item[0];
-        ast["args"] = generateAstArguments(splitCommandParams(removeBraces(item[1])));
-
+        if (isValidReference(item[0])) {
+            ast["type"] = "command";
+            ast["id"] = item[0];
+            ast["args"] = generateAstArguments(splitCommandParams(removeBraces(item[1])));
+        }
+        
         return ast;
     }
     function generateAstStatement(item) {
@@ -1060,6 +1067,18 @@
             return ast;
         }
         
+        let command = splitCommand(item);
+        if (command.length == 2) {
+            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
+                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
+                return {
+                    "id": "function",
+                    "key": generateAstArgument(command[0],["func"]),
+                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
+                }
+            }
+        }
+        
         let methods = splitCharedCommand(item,".");
         if (methods.length > 1) {
             let ast = {
@@ -1102,18 +1121,6 @@
                 }
             }
             return ast;
-        }
-        
-        let command = splitCommand(item);
-        if (command.length == 2) {
-            if ((!isBrackets(command[0]) && !isCurlyBrackets(command[0]) && !isSquareBrackets(command[0])) &&
-                (isBrackets(command[1]) && !isCurlyBrackets(command[1]) && !isSquareBrackets(command[1]))) {
-                return {
-                    "id": "function",
-                    "key": generateAstArgument(command[0],["func"]),
-                    "data": generateAstArguments(splitCommandParams(removeBraces(command[1])))
-                }
-            }
         }
 
         // constants
@@ -1446,7 +1453,15 @@
     function runSegment(content, ctx) {
         for (let i = 0; i < content.length; i++) {
             let cmd = content[i];
-            runCommand(cmd, ctx)
+            let op = runCommand(cmd, ctx);
+            if (op) {
+                if (op["cmd"]) {
+                    switch (op["cmd"]) {
+                        case "return":
+                            return op["value"]
+                    }
+                }
+            }
         }
         return null;
     }
@@ -1455,8 +1470,10 @@
             case "return":
                 return {
                     "cmd": "return",
-                    "value": runArgument(cmd.value, ctx)
+                    "value": runArgument(content.value, ctx)
                 };
+            case "standalone":
+                runArgument(content["data"],ctx);
             case "command":
                 switch (content.id) {
                     case "print":
@@ -1699,6 +1716,7 @@
                             return [prompt(getStr(content.data[0])), "string"]
                             break
                         default:
+                            console.log(content);
                             return runFunctionCall(content, content.data, ctx);
                     }
                     break
@@ -1721,6 +1739,7 @@
 
         if (args) {
             let map = key[0]["arg_map"];
+            console.log(map,args,key)
             for (let i = 0; i < args.length; i++) {
                 scope[map[i]] = runArgument(args[i], ctx);
             }
@@ -1729,7 +1748,6 @@
         let data = [null, "null"]
         if (Object.keys(key).length == 3) {
             if (key[2].flags.includes("EXTERNAL")) {
-                
             } else {
                 data = runFunction(ctx.ast, key[0]["key"], scope);
             }
