@@ -1361,12 +1361,48 @@
         return val;
     }
 
+    function getObjectStringify(value) {
+        var str = "";
+        switch (value[1]) {
+            case "array":
+                let arri = 0;
+                for (let key of Object.keys(value[0])) {
+                    arri ++;
+                    let v = value[0][key];
+                    str += getObjectStringify(v);
+                    if (arri < Object.keys(value[0]).length) {
+                        str += ",";
+                    }
+                }
+                str = "[" + str + "]";
+                break
+            case "object":
+                let obji = 0;
+                for (let key of Object.keys(value[0])) {
+                    obji ++;
+                    let v = value[0][key];
+                    str += "\"" + key + "\":" + getObjectStringify(v);
+                    if (obji < Object.keys(value[0]).length) {
+                        str += ",";
+                    }
+                }
+                str = "{" + str + "}";
+                break
+            case "function": case "module":
+                return "<" + value[1] + ":" + value[0]["key"] + ">";
+            case "string":
+                return "\"" + value[0] + "\""
+            default:
+                return getStr(value);
+        }
+        return str;
+    }
     function getStr(value, ctx) {
         if (Array.isArray(value)) {
             switch (value[1]) {
                 case "array":
                 case "object":
-                    return JSON.stringify(value[0]);
+                    return getObjectStringify(value);
             }
             return value[0] + "";
         }
@@ -1419,6 +1455,7 @@
             ext = loadModulesIntoScope(ext, ext_ast)
 
             ext["raw_ast"] = ext_ast
+            ext["key"] = external
             
             scope[flipped_externals_ref[external]] = [ext, "module"]
         }
