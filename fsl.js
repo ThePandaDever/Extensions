@@ -1401,6 +1401,7 @@
         if (Array.isArray(value)) {
             switch (value[1]) {
                 case "array":
+                    return getObjectStringify(value);
                 case "object":
                     return getObjectStringify(value);
             }
