@@ -1285,6 +1285,8 @@
         return asts[key];
     }
     function getKey(val,keys,ctx) {
+        var parent = val;
+        val = runArgument(val,ctx);
         switch (val[1]) {
             case "object": case "module":
                 for (let key of keys) {
@@ -1295,6 +1297,11 @@
                                 case "string":
                                     if (Object.keys(val[0]).includes(key["value"][0])) {
                                         val = runArgument(val[0][key["value"][0]], ctx)
+                                        if (val.length != 3) {
+                                            val[3] = {};
+                                        }
+                                        val[2]["parent"] = parent;
+                                        parent = val;
                                     } else {
                                         return [null,"null"]
                                     }
@@ -1326,6 +1333,11 @@
                                         }
 
                                         val = runArgument(v, ctx)
+                                        if (val.length != 3) {
+                                            val[3] = {}
+                                        }
+                                        val[3]["parent"] = parent;
+                                        parent = val;
                                     } else {
                                         return [null,"null"]
                                     }
@@ -1406,6 +1418,8 @@
 
             ext = loadModulesIntoScope(ext, ext_ast)
 
+            ext["raw_ast"] = ext_ast
+            
             scope[flipped_externals_ref[external]] = [ext, "module"]
         }
         return scope
@@ -1684,7 +1698,7 @@
                     //console.log(arr,items,ctx)
                     return [arr, "array"];
                 case "key_get":
-                    return getKey(runArgument(content.value, ctx), content.keys, ctx);
+                    return getKey(content.value, content.keys, ctx);
                 case "methods":
                     if (true) {
                         let value = runArgument(content.value, ctx)
@@ -1716,7 +1730,6 @@
                             return [prompt(getStr(content.data[0])), "string"]
                             break
                         default:
-                            console.log(content);
                             return runFunctionCall(content, content.data, ctx);
                     }
                     break
@@ -1737,19 +1750,27 @@
         
         let scope = {};
 
-        if (args) {
-            let map = key[0]["arg_map"];
-            console.log(map,args,key)
-            for (let i = 0; i < args.length; i++) {
-                scope[map[i]] = runArgument(args[i], ctx);
-            }
-        }
-
         let data = [null, "null"]
         if (Object.keys(key).length == 3) {
+            let m = key[2]["parent"][0]["raw_ast"]
+            let fn = m["functions"][key[0]["key"]]
             if (key[2].flags.includes("EXTERNAL")) {
+                if (args) {
+                    let map = fn["arg_map"];
+                    for (let i = 0; i < args.length; i++) {
+                        scope[map[i]] = runArgument(args[i], ctx);
+                    }
+                }
+                data = runFunction(m, key[0]["key"], scope);
             } else {
-                data = runFunction(ctx.ast, key[0]["key"], scope);
+                let fn = key[0];
+                if (args) {
+                    let map = fn["arg_map"];
+                    for (let i = 0; i < args.length; i++) {
+                        scope[map[i]] = runArgument(args[i], ctx);
+                    }
+                }
+                data = runFunction(ctx.ast, fn["key"], scope);
             }
         } else { return [null,"null"] }
         
