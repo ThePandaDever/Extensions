@@ -900,24 +900,19 @@
                     }
             }
         }
-            
-        let assign = splitAssignment(raw);
-        if (assign.length == 2) {
-            ast = {
-                "type": "assignment",
-                "key": assign[0],
-                "value": generateAstArgument(assign[1])
-            }
-        } else {
-            if (content.length == 2) {
-                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+        
+        if (content.length == 2) {
+            if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+                if (isValidReference(content[0])) {
                     ast = generateAstCommand(content);
                     if (Object.keys(ast).length > 0) {
                         return ast;
                     }
                 }
-            } else if (content.length > 2) {
-                if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+            }
+        } else if (content.length > 2) {
+            if (!isBrackets(content[0]) && !isCurlyBrackets(content[0]) && isBrackets(content[1]) && !isCurlyBrackets(content[1])) {
+                if (isValidReference(content[0])) {
                     ast = generateAstStatement(content);
                     if (Object.keys(ast).length > 0) {
                         return ast;
@@ -976,9 +971,17 @@
 
         let assign = splitAssignment(item);
         if (assign.length == 2) {
+            let refsplit = splitReferences(assign[0]);
+            let keys = [];
+            for (let i = 1; i < refsplit.length; i++) {
+                if (isSquareBrackets(refsplit[i])) {
+                    keys.push(generateAstArgument(removeSquareBraces(refsplit[i])))
+                }
+            }
             return {
                 "id": "assignment",
-                "key": assign[0],
+                "keys": keys,
+                "key": refsplit[0],
                 "value": generateAstArgument(assign[1])
             }
         }
@@ -1604,6 +1607,17 @@
                             }
                         }
                         break
+                    case "until":
+                        if (content["args"].length == 1) {
+                            let v = runArgument(content["args"][0], ctx);
+                            while (!getBool(v)) {
+                                for (let cmd of content["content"]) {
+                                    runCommand(cmd, ctx);
+                                }
+                                v = runArgument(content["args"][0], ctx);
+                            }
+                        }
+                        break
                     case "for":
                         if (content["args"].length == 1) {
                             // for (amt)
@@ -1757,9 +1771,22 @@
                         return value;
                     }
                 case "assignment":
-                    let var_val = runArgument(content.value, ctx);
-                    console.log("assignment: ", content.key, ":", var_val)
-                    ctx.scope[content.key] = var_val;
+                    let var_val = runArgument(content.value,ctx);
+                    let ref = ctx.scope;
+                    if (content.keys.length == 0) {
+                        ref[content.key] = var_val;
+                    } else {
+                        ref = ref[content.key]
+                        for (let refi = 0; refi < content.keys.length - 1; refi++) {
+                            let key = runArgument(content.keys[refi],ctx)[0];
+                            if (ref[0][key] == null) {
+                                ref[0][key] = [{},"object"];
+                            }
+                            ref = ref[0][key];
+                        }
+                        let key = runArgument(content.keys[content.keys.length-1],ctx)[0];
+                        ref[0][key] = var_val;
+                    }
                     return var_val
                     break
                 case "function":
@@ -1790,9 +1817,9 @@
 
         let data = [null, "null"]
         if (Object.keys(key).length == 3) {
-            let m = key[2]["parent"][0]["raw_ast"]
-            let fn = m["functions"][key[0]["key"]]
             if (key[2].flags.includes("EXTERNAL")) {
+                let m = key[2]["parent"][0]["raw_ast"]
+                let fn = m["functions"][key[0]["key"]]
                 if (args) {
                     let map = fn["arg_map"];
                     for (let i = 0; i < args.length; i++) {
