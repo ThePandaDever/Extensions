@@ -1155,7 +1155,7 @@
                         "value": generateAstArgument(removeSquareBraces(references[i]))
                     })
                 } else {
-                    console.warn("unexpected token '" + references[i] + "'")
+                    warn("unexpected token '" + references[i] + "'")
                 }
             }
             ast["keys"] = keys
@@ -1204,7 +1204,7 @@
                 "key": item
             };
         } else {
-            console.warn("unexpected argument '" + item + "'");
+            warn("unexpected argument '" + item + "'");
         }
     }
     function generateAst(code) {
@@ -1213,7 +1213,7 @@
             "externals": {},
             "externals_ref": {}
         };
-
+        
         let topLayer = splitSegment(code);
         for (let i = 0; i < topLayer.length; i++) {
             let def = splitStatement(topLayer[i]);
@@ -1233,11 +1233,11 @@
                                     ast["externals"][id] = generateAst(local_system[id]);
                                     ast["externals_ref"][defspaced[3]] = id;
                                 } else {
-                                    console.warn("unknown import syntax '" + defspaced.join(" ") + "'");
+                                    warn("unknown import syntax '" + defspaced.join(" ") + "'");
                                 }
                             }
                         } else {
-                            console.warn("unknown module '" + defspaced[1] + "'");
+                            warn("unknown module '" + defspaced[1] + "'");
                         }
                     }
                     break
@@ -1916,6 +1916,13 @@
             "path2":path2
         });
         Scratch.vm.runtime.startHats('fsl_hatFileRequest');
+    }
+
+    function warn(text, ctx) {
+        
+    }
+    function error(text, ctx) {
+        
     }
 
     function convertArgument(arg, language) {
