@@ -1173,9 +1173,9 @@
             };
             let pairs = splitCommandParams(removeCurlyBraces(item))
             for (let pair of pairs) {
-                let pair_tokens = splitCharedCommand(pair, ":");
-                obj["keys"].push(deStr(pair_tokens[0]));
-                obj["values"].push(generateAstArgument(pair_tokens[1]));
+                let pair_tokens = splitCharedCommand(pair.trim(), ":");
+                obj["keys"].push(deStr(pair_tokens[0].trim()));
+                obj["values"].push(generateAstArgument(pair_tokens[1].trim()));
             }
             return obj;
         }
@@ -1184,9 +1184,9 @@
                 "id": "array",
                 "values": []
             }
-            let items = splitCommandParams(removeSquareBraces(item))
+            let items = splitCommandParams(removeSquareBraces(item).trim())
             for (let itm of items) {
-                arr["values"].push(generateAstArgument(itm));
+                arr["values"].push(generateAstArgument(itm.trim()));
             }
             return arr;
         }
