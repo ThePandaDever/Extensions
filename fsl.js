@@ -1662,7 +1662,10 @@
                         let api = runArgument(content.args[0], ctx);
                         let api_cmd = runArgument(content.args[1], ctx);
                         let api_data = runArgument(content.args[2], ctx);
-
+                        
+                        if (api_cmd[0] == "goto") {
+                            console.log(api_data)
+                        }
                         if (api[1] != "string") { return }
                         if (api_cmd[1] != "string") { return }
                         if (api_data[1] != "object") { return }
