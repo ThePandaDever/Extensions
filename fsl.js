@@ -645,7 +645,6 @@
         if (current) {
             result.push(current.trim());
         }
-        console.log(result);
         return result;
     }
     function splitByFirstSpace(str) {
@@ -1043,7 +1042,6 @@
                     keys.push(generateAstArgument(removeSquareBraces(refsplit[i])))
                 }
             }
-            console.log(item,keys);
             switch (assign[1]) {
                 case "=":
                     return {
@@ -1901,7 +1899,6 @@
                 case "assignment":
                     let var_val = runArgument(content.value,ctx);
                     let ref = ctx.scope;
-                    console.log(content);
                     if (content.keys.length == 0) {
                         ref[content.key] = var_val;
                     } else {
