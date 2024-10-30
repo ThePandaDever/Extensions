@@ -600,32 +600,41 @@
                         bracketDepth --;
                         current += char;
                         break;
-                    
-                    case "=":
-                        if (!operationsPE.includes(input[i+1])) {
-                            if (!operationsPE.includes(input[i-1])) {
-                                result.push(current.trim());
-                                current = "";
-                                result.push("=");
-                                break
-                            }
-                        }
-                        if (operations.includes(input[i-1])) {
-                            if (!operationsPE.includes(input[i+1])) {
-                                result.push(current.trim() + "=");
-                                current = "";
-                                break
-                            }
-                        }
-                        current += char;
-                        break;
-
                     default:
-                        if (operations.includes(char) && !operationsPE.includes(input[i-1])) {
-                            result.push(current.trim());
-                            current = "";
+                        if (bracketDepth == 0 && squareDepth == 0 && curlyDepth == 0 && !beenSet) {
+                            switch (char) {
+                                case "=":
+                                    if (!operationsPE.includes(input[i+1])) {
+                                        if (!operationsPE.includes(input[i-1])) {
+                                            result.push(current.trim());
+                                            current = "";
+                                            result.push("=");
+                                            beenSet = true;
+                                            break
+                                        }
+                                    }
+                                    if (operations.includes(input[i-1])) {
+                                        if (!operationsPE.includes(input[i+1])) {
+                                            result.push(current.trim() + "=");
+                                            current = "";
+                                            beenSet = true;
+                                            break
+                                        }
+                                    }
+                                    current += char;
+                                    break;
+            
+                                default:
+                                    //if (operations.includes(char) && !operationsPE.includes(input[i-1])) {
+                                    //    result.push(current.trim());
+                                    //    current = "";
+                                    //}
+                                    current += char;
+                                    break
+                            }
+                        } else {
+                            current += char
                         }
-                        current += char;
                         break
                 }
             } else {
@@ -636,7 +645,7 @@
         if (current) {
             result.push(current.trim());
         }
-        console.log(input,result)
+        console.log(result);
         return result;
     }
     function splitByFirstSpace(str) {
@@ -1027,7 +1036,6 @@
 
         let assign = splitAssignment(item);
         if (assign.length == 3) {
-            console.log(assign);
             let refsplit = splitReferences(assign[0]);
             let keys = [];
             for (let i = 1; i < refsplit.length; i++) {
@@ -1035,13 +1043,58 @@
                     keys.push(generateAstArgument(removeSquareBraces(refsplit[i])))
                 }
             }
-            /*return {
-                "id": "assignment",
-                "keys": keys,
-                "key": refsplit[0],
-                "value": generateAstArgument(assign[2])
-            }*/
-            return ""
+            console.log(item,keys);
+            switch (assign[1]) {
+                case "=":
+                    return {
+                        "id": "assignment",
+                        "keys": keys,
+                        "key": refsplit[0],
+                        "value": generateAstArgument(assign[2])
+                    }
+                case "+=":
+                    return {
+                        "id": "assignment_math",
+                        "type": "inc_by",
+                        "keys": keys,
+                        "key": refsplit[0],
+                        "value": generateAstArgument(assign[2])
+                    }
+                case "-=":
+                    return {
+                        "id": "assignment_math",
+                        "type": "dec_by",
+                        "keys": keys,
+                        "key": refsplit[0],
+                        "value": generateAstArgument(assign[2])
+                    }
+                default:
+                    console.warn(assign[1])
+            }
+        } else if (assign.length == 2) {
+            let refsplit = splitReferences(assign[0]);
+            let keys = [];
+            for (let i = 1; i < refsplit.length; i++) {
+                if (isSquareBrackets(refsplit[i])) {
+                    keys.push(generateAstArgument(removeSquareBraces(refsplit[i])))
+                }
+            }
+            switch(assign[1]) {
+                case "++":
+                    return {
+                        "id": "assignment_math",
+                        "type": "inc",
+                        "keys": keys,
+                        "key": refsplit[0]
+                    }
+                case "--":
+                    return {
+                        "id": "assignment_math",
+                        "type": "dec",
+                        "keys": keys,
+                        "key": refsplit[0]
+                    }
+            }
         }
 
         // numbers
@@ -1648,9 +1701,14 @@
                         if (content["args"].length == 1) {
                             let v = runArgument(content["args"][0], ctx);
                             if (getBool(v)) {
-                                for (let cmd of content["content"]) {
-                                    runCommand(cmd, ctx);
+                                let out = runSegment(content["content"], ctx);
+                                if (out === null) {
+                                    return;
                                 }
+                                return {
+                                    "cmd": "return",
+                                    "value": out
+                                };
                             }
                         }
                         break
@@ -1658,10 +1716,14 @@
                         if (content["args"].length == 1) {
                             let v = runArgument(content["args"][0], ctx);
                             while (getBool(v)) {
-                                for (let cmd of content["content"]) {
-                                    runCommand(cmd, ctx);
+                                let out = runSegment(content["content"], ctx);
+                                if (out === null) {
+                                    return;
                                 }
-                                v = runArgument(content["args"][0], ctx);
+                                return {
+                                    "cmd": "return",
+                                    "value": out
+                                };
                             }
                         }
                         break
@@ -1681,9 +1743,14 @@
                             // for (amt)
                             let iter = getNum(runArgument(content["args"][0]))
                             for (let i = 0; i < iter; i++) {
-                                for (let cmd of content["content"]) {
-                                    runCommand(cmd, ctx);
+                                let out = runSegment(content["content"], ctx);
+                                if (out === null) {
+                                    return;
                                 }
+                                return {
+                                    "cmd": "return",
+                                    "value": out
+                                };
                             }
                         } else if (content["args"].length == 2) {
                             // for (i = 0, i < 10)
@@ -1695,9 +1762,14 @@
                             let var_key = content.args[0].key;
                             let cond = runArgument(content.args[1], ctx);
                             while (getBool(cond)) {
-                                for (let cmd of content["content"]) {
-                                    runCommand(cmd, ctx);
+                                let out = runSegment(content["content"], ctx);
+                                if (out === null) {
+                                    return;
                                 }
+                                return {
+                                    "cmd": "return",
+                                    "value": out
+                                };
                                 ctx.scope[var_key][0] += 1;
                                 cond = runArgument(content.args[1], ctx);
                             }
@@ -1716,9 +1788,14 @@
                                 return;
                             }
                             while (getBool(cond)) {
-                                for (let cmd of content["content"]) {
-                                    runCommand(cmd, ctx);
+                                let out = runSegment(content["content"], ctx);
+                                if (out === null) {
+                                    return;
                                 }
+                                return {
+                                    "cmd": "return",
+                                    "value": out
+                                };
                                 ctx.scope[content.args[0].key][0] += step[0];
                                 cond = runArgument(content.args[1], ctx);
                                 console.log("inc", content.args[0].key, step[0], "now", ctx.scope[content.args[0].key][0])
@@ -1732,13 +1809,6 @@
                         runFunctionCall(call, content.args, ctx);
                         break
                 }
-                break
-            case "assignment":
-                if (!Object.keys(ctx).includes("scope")) {
-                    console.warn("ctx missing scope key.");
-                    return;
-                }
-                ctx.scope[content.key] = runArgument(content.value, ctx)
                 break
         }
     }
@@ -1831,6 +1901,7 @@
                 case "assignment":
                     let var_val = runArgument(content.value,ctx);
                     let ref = ctx.scope;
+                    console.log(content);
                     if (content.keys.length == 0) {
                         ref[content.key] = var_val;
                     } else {
@@ -1846,6 +1917,51 @@
                         ref[0][key] = var_val;
                     }
                     return var_val
+                    break
+                case "assignment_math":
+                    if (true) {
+                        let var_val = [0,"number"]
+                        let ref = ctx.scope;
+                        
+                        switch (content.type) {
+                            case "inc":
+                                var_val = ctx.scope[content.key]
+                                var_val[0] ++;
+                                break
+                            case "inc_by":
+                                var_val = ctx.scope[content.key]
+                                var_val = runMath("+", var_val, runArgument(content.value));
+                                break
+                            case "dec":
+                                var_val = ctx.scope[content.key]
+                                var_val[0] --;
+                                break
+                            case "dec_by":
+                                var_val = ctx.scope[content.key]
+                                var_val = runMath("-", var_val, runArgument(content.value));
+                                break
+                            default:
+                                var_val = runArgument(content.value,ctx);
+                                break
+                        }
+                        
+                        if (content.keys.length == 0) {
+                            ref[content.key] = var_val;
+                        } else {
+                            ref = ref[content.key]
+                            for (let refi = 0; refi < content.keys.length - 1; refi++) {
+                                let key = runArgument(content.keys[refi],ctx)[0];
+                                if (ref[0][key] == null) {
+                                    ref[0][key] = [{},"object"];
+                                }
+                                ref = ref[0][key];
+                            }
+                            let key = runArgument(content.keys[content.keys.length-1],ctx)[0];
+                            
+                            ref[0][key] = var_val;
+                        }
+                        return var_val
+                    }
                     break
                 case "function":
                     switch (content.type) {
