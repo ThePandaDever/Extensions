@@ -1664,7 +1664,6 @@
                         let api_data = runArgument(content.args[2], ctx);
                         
                         if (api_cmd[0] == "goto") {
-                            console.log(api_data)
                         }
                         if (api[1] != "string") { return }
                         if (api_cmd[1] != "string") { return }
@@ -1805,7 +1804,7 @@
                                 }
                                 ctx.scope[content.args[0].key][0] += step[0];
                                 cond = runArgument(content.args[1], ctx);
-                                //console.log("inc", content.args[0].key, step[0], "now", ctx.scope[content.args[0].key][0])
+                                console.log("inc", content.args[0].key, step[0], "now", ctx.scope[content.args[0].key][0])
                             }
                         }
                         break
@@ -1882,7 +1881,6 @@
                         let v = runArgument(items[i], ctx);
                         arr.push(v);
                     }
-                    //console.log(arr,items,ctx)
                     return [arr, "array"];
                 case "key_get":
                     return getKey(content.value, content.keys, ctx);
