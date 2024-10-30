@@ -1701,12 +1701,12 @@
                             if (getBool(v)) {
                                 let out = runSegment(content["content"], ctx);
                                 if (out === null) {
-                                    return;
+                                } else {
+                                    return {
+                                        "cmd": "return",
+                                        "value": out
+                                    };
                                 }
-                                return {
-                                    "cmd": "return",
-                                    "value": out
-                                };
                             }
                         }
                         break
@@ -1716,12 +1716,13 @@
                             while (getBool(v)) {
                                 let out = runSegment(content["content"], ctx);
                                 if (out === null) {
-                                    return;
+                                } else {
+                                    return {
+                                        "cmd": "return",
+                                        "value": out
+                                    };
                                 }
-                                return {
-                                    "cmd": "return",
-                                    "value": out
-                                };
+                                v = runArgument(content["args"][0], ctx);
                             }
                         }
                         break
@@ -1729,8 +1730,13 @@
                         if (content["args"].length == 1) {
                             let v = runArgument(content["args"][0], ctx);
                             while (!getBool(v)) {
-                                for (let cmd of content["content"]) {
-                                    runCommand(cmd, ctx);
+                                let out = runSegment(content["content"], ctx);
+                                if (out === null) {
+                                } else {
+                                    return {
+                                        "cmd": "return",
+                                        "value": out
+                                    };
                                 }
                                 v = runArgument(content["args"][0], ctx);
                             }
@@ -1743,12 +1749,12 @@
                             for (let i = 0; i < iter; i++) {
                                 let out = runSegment(content["content"], ctx);
                                 if (out === null) {
-                                    return;
+                                } else {
+                                    return {
+                                        "cmd": "return",
+                                        "value": out
+                                    };
                                 }
-                                return {
-                                    "cmd": "return",
-                                    "value": out
-                                };
                             }
                         } else if (content["args"].length == 2) {
                             // for (i = 0, i < 10)
@@ -1762,12 +1768,12 @@
                             while (getBool(cond)) {
                                 let out = runSegment(content["content"], ctx);
                                 if (out === null) {
-                                    return;
+                                } else {
+                                    return {
+                                        "cmd": "return",
+                                        "value": out
+                                    };
                                 }
-                                return {
-                                    "cmd": "return",
-                                    "value": out
-                                };
                                 ctx.scope[var_key][0] += 1;
                                 cond = runArgument(content.args[1], ctx);
                             }
@@ -1788,15 +1794,15 @@
                             while (getBool(cond)) {
                                 let out = runSegment(content["content"], ctx);
                                 if (out === null) {
-                                    return;
+                                } else {
+                                    return {
+                                        "cmd": "return",
+                                        "value": out
+                                    };
                                 }
-                                return {
-                                    "cmd": "return",
-                                    "value": out
-                                };
                                 ctx.scope[content.args[0].key][0] += step[0];
                                 cond = runArgument(content.args[1], ctx);
-                                console.log("inc", content.args[0].key, step[0], "now", ctx.scope[content.args[0].key][0])
+                                //console.log("inc", content.args[0].key, step[0], "now", ctx.scope[content.args[0].key][0])
                             }
                         }
                         break
