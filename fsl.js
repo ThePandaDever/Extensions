@@ -539,49 +539,105 @@
 
         return result;
     }
-    function splitAssignment(str) {
-        let insideQuotes = false;
-        let insideBrackets = 0;
-        // Track how deep we are inside brackets
-        let escapeNext = false;
+    function splitAssignment(input) {
+        let result = [];
+        let current = "";
 
-        for (let i = 0; i < str.length; i++) {
-            const char = str[i];
+        let inSingleQuotes = false;
+        let inDoubleQuotes = false;
 
-            // Handle escaping (e.g. \")
-            if (escapeNext) {
-                escapeNext = false;
-                continue;
+        let beenSet = false;
+
+        let bracketDepth = 0;
+        let squareDepth = 0;
+        let curlyDepth = 0;
+
+        let operations = [
+            "+",
+            "-",
+            "*",
+            "/"
+        ]
+        let operationsPE = operations.concat("=");
+
+        let i = -1;
+        for (let char of input) {
+            i ++;
+            if (char == '"' && !inSingleQuotes) {
+                inDoubleQuotes = !inDoubleQuotes;
             }
-            if (char === '\\') {
-                escapeNext = true;
-                continue;
+            if (char == "'" && !inDoubleQuotes) {
+                inSingleQuotes = !inSingleQuotes;
             }
 
-            // Toggle for quotes
-            if (char === '"' || char === "'") {
-                insideQuotes = !insideQuotes;
-                continue;
-            }
+            let inAnyQuotes = inSingleQuotes || inDoubleQuotes;
 
-            // Handle brackets and parentheses
-            if (!insideQuotes) {
-                if (char === '[' || char === '{' || char === '(') {
-                    insideBrackets++;
-                } else if (char === ']' || char === '}' || char === ')') {
-                    insideBrackets--;
+            if (!inAnyQuotes) {
+                switch (char) {
+                    case "{":
+                        curlyDepth ++;
+                        current += char;
+                        break
+                    case "}":
+                        curlyDepth --;
+                        current += char;
+                        break;
+
+                    case "[":
+                        squareDepth ++;
+                        current += char;
+                        break
+                    case "]":
+                        squareDepth --;
+                        current += char;
+                        break;
+
+                    case "(":
+                        bracketDepth ++;
+                        current += char;
+                        break
+                    case ")":
+                        bracketDepth --;
+                        current += char;
+                        break;
+                    
+                    case "=":
+                        if (!operationsPE.includes(input[i+1])) {
+                            if (!operationsPE.includes(input[i-1])) {
+                                result.push(current.trim());
+                                current = "";
+                                result.push("=");
+                                break
+                            }
+                        }
+                        if (operations.includes(input[i-1])) {
+                            if (!operationsPE.includes(input[i+1])) {
+                                result.push(current.trim() + "=");
+                                current = "";
+                                break
+                            }
+                        }
+                        current += char;
+                        break;
+
+                    default:
+                        if (operations.includes(char) && !operationsPE.includes(input[i-1])) {
+                            result.push(current.trim());
+                            current = "";
+                        }
+                        current += char;
+                        break
                 }
-            }
-
-            // Split at first '=' not inside quotes or brackets
-            if (char === '=' && !insideQuotes && insideBrackets === 0 && str[i-1] == " " && str[i+1] == " ") {
-                // Split and return trimmed parts
-                return [str.slice(0, i).trim(), str.slice(i + 1).trim()];
+            } else {
+                current += char;
             }
         }
 
-        // If no '=' is found, return the original string and an empty string
-        return [];
+        if (current) {
+            result.push(current.trim());
+        }
+        console.log(input,result)
+        return result;
     }
     function splitByFirstSpace(str) {
         const firstSpaceIndex = str.indexOf(' ');
@@ -970,7 +1026,8 @@
         }
 
         let assign = splitAssignment(item);
-        if (assign.length == 2) {
+        if (assign.length == 3) {
+            console.log(assign);
             let refsplit = splitReferences(assign[0]);
             let keys = [];
             for (let i = 1; i < refsplit.length; i++) {
@@ -978,12 +1035,13 @@
                     keys.push(generateAstArgument(removeSquareBraces(refsplit[i])))
                 }
             }
-            return {
+            /*return {
                 "id": "assignment",
                 "keys": keys,
                 "key": refsplit[0],
-                "value": generateAstArgument(assign[1])
-            }
+                "value": generateAstArgument(assign[2])
+            }*/
+            return ""
         }
 
         // numbers
