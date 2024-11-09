@@ -25,7 +25,7 @@
                         blockType: BlockType.REPORTER,
                         text: "Run Foasm [code] with params [params]",
                         arguments: {
-                            code: { type: ArgumentType.NUMBER, defaultValue: "" },
+                            code: { type: ArgumentType.STRING, defaultValue: "" },
                             params: { type: ArgumentType.NUMBER, defaultValue: "{}" }
                         }
                     },
@@ -34,7 +34,7 @@
                         blockType: BlockType.REPORTER,
                         text: "Split Foasm [code]",
                         arguments: {
-                            code: { type: ArgumentType.NUMBER, defaultValue: "set out hello :3;out @out" }
+                            code: { type: ArgumentType.STRING, defaultValue: "set out hello :3;out @out" }
                         }
                     }
                 ],
@@ -51,29 +51,53 @@
 
             function Eval(param) {
                 if (param[0] == "@") {
-                    console.log(mem[param.slice(1)])
-                    return mem[param.slice(1)]
+                    return mem[param.slice(1)];
                 }
                 return param;
             }
 
-            let mem = []
+            let labels = {};
+            
+            let sindex = 0;
+            while (sindex < code.length) {
+                let line = code[sindex];
+                if (line[0] == "lbl") {
+                    let v = line.concat();
+                    v.splice(0, 2);
+                    labels[v.join(" ")] = sindex
+                }
+                sindex ++;
+            }
+            
+            let mem = {};
 
             let index = 0;
             while (index < code.length) {
-                let line = code[index]
+                let line = code[index];
 
                 switch (line[0]) {
                     case "set":
-                        let v = mem
+                        let v = line.concat();
                         v.splice(0, 2);
-                        console.log(line[1],v)
-                        mem[line[1]] = v
+                        mem[line[1]] = v.join(" ");
+                        break
+                    case "del":
+                        mem[line[1]] = null;
                         break
                     case "out":
                         return Eval(line[1]);
+                    case "lbl": break
+                    case "jmp":
+                        
+                        let jmp_l = line.concat();
+                        jmp_l.splice(0, 1).join(" ");
+                        console.log(labels,jmp_l);
+                        if (Object.keys(jmp_l)) {
+                            
+                        }
+                        break
                     default:
-                        console.error("unknown cmd '" + line[0] + "'")
+                        console.error("unknown cmd '" + line[0] + "'");
                         break
                 }
 
